@@ -1,0 +1,69 @@
+<mujoco model="Asimov Task">
+
+  <!-- include robot model -->
+  <include file="asimov.xml"/>
+
+  <!-- simulation settings -->
+  <size memory="1M"/>
+  <option gravity="0 0 -9.81" timestep="0.002" integrator="RK4"/>
+  <compiler angle="radian"/>
+
+  <asset>
+    <!-- define a procedural checker texture -->
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+            rgb1="0.2 0.2 0.2" rgb2="0.8 0.8 0.8" mark="none" />
+
+    <!-- material using that texture -->
+    <material name="grey_grid" texture="grid" texrepeat="5 5" reflectance="0.2" />
+  </asset>
+
+
+
+
+
+
+  <actuator>
+      <motor name="left_hip_pitch_joint" joint="left_hip_pitch_joint" ctrllimited="true" ctrlrange="-40 40"/>
+      <motor name="left_hip_roll_joint" joint="left_hip_roll_joint" ctrllimited="true" ctrlrange="-40 40"/>
+      <motor name="left_hip_yaw_joint" joint="left_hip_yaw_joint" ctrllimited="true" ctrlrange="-30 30"/>
+      <motor name="left_knee_joint" joint="left_knee_joint" ctrllimited="true" ctrlrange="-60 60"/>
+      <motor name="left_ankle_pitch_joint" joint="left_ankle_pitch_joint" ctrllimited="true" ctrlrange="-25 25"/>
+      <motor name="left_ankle_roll_joint" joint="left_ankle_roll_joint" ctrllimited="true" ctrlrange="-15 15"/>
+
+      <motor name="right_hip_pitch_joint" joint="right_hip_pitch_joint" ctrllimited="true" ctrlrange="-40 40"/>
+      <motor name="right_hip_roll_joint" joint="right_hip_roll_joint" ctrllimited="true" ctrlrange="-40 40"/>
+      <motor name="right_hip_yaw_joint" joint="right_hip_yaw_joint" ctrllimited="true" ctrlrange="-30 30"/>
+      <motor name="right_knee_joint" joint="right_knee_joint" ctrllimited="true" ctrlrange="-60 60"/>
+      <motor name="right_ankle_pitch_joint" joint="right_ankle_pitch_joint" ctrllimited="true" ctrlrange="-25 25"/>
+      <motor name="right_ankle_roll_joint" joint="right_ankle_roll_joint" ctrllimited="true" ctrlrange="-15 15"/>
+  </actuator>
+
+
+  <sensor>
+      <framequat name="orientation" objtype="site" noise="0.001" objname="imu" />
+      <gyro name="angular-velocity" site="imu" noise="0.005" />
+  </sensor>
+
+
+  <!-- visualization -->
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0.3 0.3 0.3"/>
+    <map znear="0.01" zfar="50"/>
+  </visual>
+
+  <statistic extent="1.5" center="0 0 0.5"/>
+
+  <!-- world setup -->
+  <worldbody>
+
+  <geom name="floor" type="plane" size="5 5 0.1" pos="0 0 -0.05"
+      rgba="0.8 0.8 0.8 1" material="grey_grid" friction="1.0 0.1 0.1" condim="3"/>
+
+    <light name="sun" pos="0 0 5" dir="0 0 -1"
+           diffuse="0.8 0.8 0.8" specular="0.3 0.3 0.3"
+           directional="true"/>
+  </worldbody>
+
+
+
+</mujoco>
