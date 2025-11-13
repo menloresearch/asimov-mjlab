@@ -172,6 +172,37 @@
     </body>
   </worldbody>
 
+  <!-- Fixed tendons implementing ankle A/B linearized mapping -->
+  <tendon>
+    <!-- Left ankle: A = -L*theta - d*phi, B = -L*theta + d*phi -->
+    <fixed name="left_ankle_A">
+      <joint joint="left_ankle_pitch_joint" coef="-0.09"/>
+      <joint joint="left_ankle_roll_joint" coef="-0.02"/>
+    </fixed>
+    <fixed name="left_ankle_B">
+      <joint joint="left_ankle_pitch_joint" coef="-0.09"/>
+      <joint joint="left_ankle_roll_joint" coef="0.02"/>
+    </fixed>
+
+    <!-- Right ankle (note pitch axis flips): A = +L*theta - d*phi, B = +L*theta + d*phi -->
+    <fixed name="right_ankle_A">
+      <joint joint="right_ankle_pitch_joint" coef="0.09"/>
+      <joint joint="right_ankle_roll_joint" coef="-0.02"/>
+    </fixed>
+    <fixed name="right_ankle_B">
+      <joint joint="right_ankle_pitch_joint" coef="0.09"/>
+      <joint joint="right_ankle_roll_joint" coef="0.02"/>
+    </fixed>
+  </tendon>
+
+  <!-- Tendon position actuators for A/B control (length targets in meters) -->
+  <actuator>
+    <position name="left_ankle_A"  tendon="left_ankle_A"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
+    <position name="left_ankle_B"  tendon="left_ankle_B"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
+    <position name="right_ankle_A" tendon="right_ankle_A" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
+    <position name="right_ankle_B" tendon="right_ankle_B" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
+  </actuator>
+
 
   <contact>
     <exclude body1="pelvis_link" body2="left_hip_pitch_link" />

@@ -247,7 +247,6 @@ ASIMOV_ARTICULATION = EntityArticulationInfoCfg(
   actuators=(
     ASIMOV_ACTUATOR_HIP_PITCH_YAW,
     ASIMOV_ACTUATOR_HIP_ROLL_KNEE,
-    ASIMOV_ACTUATOR_ANKLE,
     ASIMOV_TOE_ACTUATOR,
   ),
   soft_joint_pos_limit_factor=0.9,
