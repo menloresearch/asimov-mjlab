@@ -10,6 +10,9 @@
       </default>
       <default class="collision">
         <geom material="collision_material" condim="3" contype="0" conaffinity="1" priority="1" group="1" solref="0.005 1" solimp="0.99 0.999 1e-05" friction="1 0.01 0.01" />
+        <default class="foot_capsule">
+          <geom type="capsule" size="0.01" />
+        </default>
       </default>
     </default>
   </default>
@@ -79,14 +82,24 @@
                   <joint name="left_ankle_roll_joint" type="hinge" ref="0.0" class="motor" range="-0.349066 0.349066" axis="-1 0 0" />
                   <site name="left_ankle_roll_joint_site" pos="0 0 0" quat="1 0 0 0" />
                   <inertial pos="0.081381 -0.00033806 -0.015509" quat="1.0 0.0 0.0 0.0" mass="0.61291" diaginertia="0.00031968 0.00045036 0.00070504" />
-                  <geom name="left_ankle_roll_link_collision" pos="0 0 0" quat="1.0 0.0 0.0 0.0" type="mesh" mesh="left_ankle_roll_link.STL" class="collision" />
                   <geom name="left_ankle_roll_link_visual" pos="0 0 0" quat="1.0 0.0 0.0 0.0" material="visualgeom" type="mesh" mesh="left_ankle_roll_link.STL" class="visual" />
+                  <!-- Foot collision capsules - distributed contact surface -->
+                  <geom name="left_foot1_collision" class="foot_capsule" fromto="0.08 -0.02 -0.02 0.04 -0.02 -0.02"/>
+                  <geom name="left_foot2_collision" class="foot_capsule" fromto="0.0 -0.015 -0.02 0.10 -0.015 -0.02"/>
+                  <geom name="left_foot3_collision" class="foot_capsule" fromto="-0.01 -0.008 -0.02 0.11 -0.008 -0.02"/>
+                  <geom name="left_foot4_collision" class="foot_capsule" fromto="-0.015 0 -0.02 0.115 0 -0.02"/>
+                  <geom name="left_foot5_collision" class="foot_capsule" fromto="-0.01 0.008 -0.02 0.11 0.008 -0.02"/>
+                  <geom name="left_foot6_collision" class="foot_capsule" fromto="0.0 0.015 -0.02 0.10 0.015 -0.02"/>
+                  <geom name="left_foot7_collision" class="foot_capsule" fromto="0.08 0.02 -0.02 0.04 0.02 -0.02"/>
                   <body name="left_toe_link" pos="0.10253 -0.0043664 -0.0067324" quat="1.0 0.0 0.0 0.0">
                     <joint name="left_toe_joint" type="hinge" ref="0.0" class="motor" range="-0.6 0.0" axis="0.010532 0.99994 0" />
                     <site name="left_toe_joint_site" pos="0 0 0" quat="1 0 0 0" />
                     <inertial pos="0.0320167773761624 0.000718248511968056 -0.0141312773022902" quat="1.0 0.0 0.0 0.0" mass="0.112221237946844" diaginertia="5.5351925218088e-05 3.65130809524718e-05 8.54029969529202e-05" />
-                    <geom name="left_toe_link_collision" pos="0 0 0" quat="1.0 0.0 0.0 0.0" type="mesh" mesh="left_toe_link.STL" class="collision" />
                     <geom name="left_toe_link_visual" pos="0 0 0" quat="1.0 0.0 0.0 0.0" material="visualgeom" type="mesh" mesh="left_toe_link.STL" class="visual" />
+                    <!-- Toe collision capsules -->
+                    <geom name="left_toe1_collision" class="foot_capsule" fromto="0.0 -0.008 -0.015 0.06 -0.008 -0.015"/>
+                    <geom name="left_toe2_collision" class="foot_capsule" fromto="0.0 0 -0.015 0.06 0 -0.015"/>
+                    <geom name="left_toe3_collision" class="foot_capsule" fromto="0.0 0.008 -0.015 0.06 0.008 -0.015"/>
                   </body>
                 </body>
               </body>
@@ -128,14 +141,24 @@
                   <joint name="right_ankle_roll_joint" type="hinge" ref="0.0" class="motor" range="-0.349066 0.349066" axis="-1 0 0" />
                   <site name="right_ankle_roll_joint_site" pos="0 0 0" quat="1 0 0 0" />
                   <inertial pos="0.081347 0.00027474 -0.015509" quat="1.0 0.0 0.0 0.0" mass="0.61291" diaginertia="0.0003197 0.00045029 0.00070498" />
-                  <geom name="right_ankle_roll_link_collision" pos="0 0 0" quat="1.0 0.0 0.0 0.0" type="mesh" mesh="right_ankle_roll_link.STL" class="collision" />
                   <geom name="right_ankle_roll_link_visual" pos="0 0 0" quat="1.0 0.0 0.0 0.0" material="visualgeom" type="mesh" mesh="right_ankle_roll_link.STL" class="visual" />
+                  <!-- Foot collision capsules - distributed contact surface -->
+                  <geom name="right_foot1_collision" class="foot_capsule" fromto="0.08 -0.02 -0.02 0.04 -0.02 -0.02"/>
+                  <geom name="right_foot2_collision" class="foot_capsule" fromto="0.0 -0.015 -0.02 0.10 -0.015 -0.02"/>
+                  <geom name="right_foot3_collision" class="foot_capsule" fromto="-0.01 -0.008 -0.02 0.11 -0.008 -0.02"/>
+                  <geom name="right_foot4_collision" class="foot_capsule" fromto="-0.015 0 -0.02 0.115 0 -0.02"/>
+                  <geom name="right_foot5_collision" class="foot_capsule" fromto="-0.01 0.008 -0.02 0.11 0.008 -0.02"/>
+                  <geom name="right_foot6_collision" class="foot_capsule" fromto="0.0 0.015 -0.02 0.10 0.015 -0.02"/>
+                  <geom name="right_foot7_collision" class="foot_capsule" fromto="0.08 0.02 -0.02 0.04 0.02 -0.02"/>
                   <body name="right_toe_link" pos="0.10247 0.0042796 -0.0067324" quat="1.0 0.0 0.0 0.0">
                     <joint name="right_toe_joint" type="hinge" ref="0.0" class="motor" range="0 0.6" axis="0.0074685 -0.99997 0" />
                     <site name="right_toe_joint_site" pos="0 0 0" quat="1 0 0 0" />
                     <inertial pos="0.0320141754360937 -0.000816708013105544 -0.0141309094649689" quat="1.0 0.0 0.0 0.0" mass="0.112221754054884" diaginertia="5.5358948695321e-05 3.65052769951383e-05 8.54017357052965e-05" />
-                    <geom name="right_toe_link_collision" pos="0 0 0" quat="1.0 0.0 0.0 0.0" type="mesh" mesh="right_toe_link.STL" class="collision" />
                     <geom name="right_toe_link_visual" pos="0 0 0" quat="1.0 0.0 0.0 0.0" material="visualgeom" type="mesh" mesh="right_toe_link.STL" class="visual" />
+                    <!-- Toe collision capsules -->
+                    <geom name="right_toe1_collision" class="foot_capsule" fromto="0.0 -0.008 -0.015 0.06 -0.008 -0.015"/>
+                    <geom name="right_toe2_collision" class="foot_capsule" fromto="0.0 0 -0.015 0.06 0 -0.015"/>
+                    <geom name="right_toe3_collision" class="foot_capsule" fromto="0.0 0.008 -0.015 0.06 0.008 -0.015"/>
                   </body>
                 </body>
               </body>

@@ -51,7 +51,7 @@ VIEWER_CONFIG = ViewerConfig(
 )
 
 SIM_CFG = SimulationCfg(
-  nconmax=35,
+  nconmax=50,  # Increased for capsule-based foot collisions (was 35)
   njmax=300,
   mujoco=MujocoCfg(
     timestep=0.005,
@@ -146,18 +146,22 @@ def create_velocity_env_cfg(
       func=mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_ang_vel"},
       noise=Unoise(n_min=-0.2, n_max=0.2),
+      scale=0.25,  # Reduce angular velocity magnitude for better policy learning
     ),
     "projected_gravity": ObservationTermCfg(
       func=mdp.projected_gravity,
       noise=Unoise(n_min=-0.05, n_max=0.05),
+      scale=1.0,
     ),
     "joint_pos": ObservationTermCfg(
       func=mdp.joint_pos_rel,
       noise=Unoise(n_min=-0.01, n_max=0.01),
+      scale=1.0,
     ),
     "joint_vel": ObservationTermCfg(
       func=mdp.joint_vel_rel,
       noise=Unoise(n_min=-1.5, n_max=1.5),
+      scale=0.05,  # Reduce joint velocity magnitude for better policy learning
     ),
     "actions": ObservationTermCfg(func=mdp.last_action),
     "command": ObservationTermCfg(
@@ -279,7 +283,7 @@ def create_velocity_env_cfg(
       params={"sensor_name": "robot/root_angmom"},
     ),
     "dof_pos_limits": RewardTermCfg(func=mdp.joint_pos_limits, weight=-1.0),
-    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.1),
+    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),  # Reduced to allow dynamic motion
     "self_collisions": RewardTermCfg(
       func=mdp.self_collision_cost,
       weight=self_collision_weight,
@@ -298,7 +302,7 @@ def create_velocity_env_cfg(
     ),
     "foot_clearance": RewardTermCfg(
       func=mdp.feet_clearance,
-      weight=-2.0,
+      weight=-0.5,  # Reduced from -2.0 to avoid conflicting with air_time reward
       params={
         "target_height": 0.1,
         "command_name": "twist",
@@ -308,7 +312,7 @@ def create_velocity_env_cfg(
     ),
     "foot_swing_height": RewardTermCfg(
       func=mdp.feet_swing_height,
-      weight=-0.25,
+      weight=-0.1,  # Reduced from -0.25 to avoid conflicting with air_time reward
       params={
         "sensor_name": "feet_ground_contact",
         "target_height": 0.1,

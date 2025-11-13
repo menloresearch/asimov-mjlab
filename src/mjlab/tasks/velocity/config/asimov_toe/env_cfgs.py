@@ -18,9 +18,12 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
   """Create Asimov rough terrain velocity tracking configuration."""
   # Asimov feet sites at ankle roll joints
   site_names = ("left_ankle_roll_joint_site", "right_ankle_roll_joint_site")
+  # Foot and toe capsule collision geometries
   geom_names = (
-    "left_ankle_roll_link_collision",
-    "right_ankle_roll_link_collision",
+    r"left_foot\d+_collision",
+    r"left_toe\d+_collision",
+    r"right_foot\d+_collision",
+    r"right_toe\d+_collision",
   )
 
   feet_ground_cfg = ContactSensorCfg(
@@ -95,7 +98,8 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
     angular_momentum_weight=-0.03,
     self_collision_weight=-1.0,
     # Enable air time reward for lighter robot (better for jumping)
-    air_time_weight=0.5,
+    # Balanced at 1.0 to work with foot clearance penalties
+    air_time_weight=1.0,
   )
 
   assert cfg.commands is not None
@@ -103,13 +107,13 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
   twist_cmd.viz.z_offset = 0.8  # Asimov is shorter than G1
 
-  # More conservative velocity commands due to:
-  # 1. Narrow stance (11.3 cm hip width)
-  # 2. Canted hip pitch (less stable)
-  # 3. Limited ankle ROM
-  twist_cmd.ranges.lin_vel_x = (-0.8, 0.8)  # Reduced from (-1.0, 1.0)
-  twist_cmd.ranges.lin_vel_y = (-0.6, 0.6)  # Reduced from (-1.0, 1.0) - narrow stance
-  twist_cmd.ranges.ang_vel_z = (-0.6, 0.6)  # Slightly reduced from (-0.5, 0.5)
+  # Conservative velocity commands for initial training:
+  # 1. Forward-only (no backward/lateral) to simplify learning
+  # 2. Wider turning range to encourage dynamic motion
+  # 3. Can increase complexity after stable forward walking is learned
+  twist_cmd.ranges.lin_vel_x = (0.0, 0.8)   # Forward only (no backward)
+  twist_cmd.ranges.lin_vel_y = (0.0, 0.0)   # No lateral movement initially
+  twist_cmd.ranges.ang_vel_z = (-0.8, 0.8)  # Wider turning range
 
   return cfg
 

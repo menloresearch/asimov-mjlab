@@ -210,11 +210,11 @@ KNEES_BENT_KEYFRAME = EntityCfg.InitialStateCfg(
 FULL_COLLISION = CollisionCfg(
   geom_names_expr=(".*_collision",),
   condim={
-    r"^(left|right)_ankle_roll_link_collision$": 3,
+    r"^(left|right)_(foot|toe)\d+_collision$": 3,
     ".*_collision": 1
   },
-  priority={r"^(left|right)_ankle_roll_link_collision$": 1},
-  friction={r"^(left|right)_ankle_roll_link_collision$": (0.8,)},
+  priority={r"^(left|right)_(foot|toe)\d+_collision$": 1},
+  friction={r"^(left|right)_(foot|toe)\d+_collision$": (0.8,)},
 )
 
 FULL_COLLISION_WITHOUT_SELF = CollisionCfg(
@@ -222,16 +222,16 @@ FULL_COLLISION_WITHOUT_SELF = CollisionCfg(
   contype=0,
   conaffinity=1,
   condim={
-    r"^(left|right)_ankle_roll_link_collision$": 3,
+    r"^(left|right)_(foot|toe)\d+_collision$": 3,
     ".*_collision": 1
   },
-  priority={r"^(left|right)_ankle_roll_link_collision$": 1},
-  friction={r"^(left|right)_ankle_roll_link_collision$": (0.8,)},
+  priority={r"^(left|right)_(foot|toe)\d+_collision$": 1},
+  friction={r"^(left|right)_(foot|toe)\d+_collision$": (0.8,)},
 )
 
 # Only feet collision enabled (recommended for initial training)
 FEET_ONLY_COLLISION = CollisionCfg(
-  geom_names_expr=(r"^(left|right)_ankle_roll_link_collision$",),
+  geom_names_expr=(r"^(left|right)_(foot|toe)\d+_collision$",),
   contype=0,
   conaffinity=1,
   condim=3,
@@ -281,8 +281,8 @@ for a in ASIMOV_ARTICULATION.actuators:
     s = {n: s for n in names}
   for n in names:
     if n in e and n in s and s[n]:
-      # 0.3 multiplier (vs G1's 0.25) for more responsive control on lighter robot
-      ASIMOV_ACTION_SCALE[n] = 0.3 * e[n] / s[n]
+      # 0.25 multiplier (same as G1) for stable control on lighter robot
+      ASIMOV_ACTION_SCALE[n] = 0.25 * e[n] / s[n]
 
 if __name__ == "__main__":
   import mujoco.viewer as viewer
