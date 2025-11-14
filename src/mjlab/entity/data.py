@@ -237,7 +237,7 @@ class EntityData:
     quat = self.data.xquat[:, self.indexing.root_body_id]
     body_iquat = self.model.body_iquat[:, self.indexing.root_body_id]
     assert body_iquat is not None
-    quat_w = quat_mul(quat, body_iquat[None])
+    quat_w = quat_mul(quat, body_iquat.squeeze(1))
     return torch.cat([pos_w, quat_w], dim=-1)
 
   @property

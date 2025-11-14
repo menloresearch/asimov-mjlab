@@ -156,3 +156,39 @@ def test_read_requires_forward_to_be_current(device):
   current_pose = entity.data.root_link_pose_w
   assert torch.allclose(current_pose, new_pose, atol=1e-4)
   assert not torch.allclose(current_pose, initial_pose, atol=1e-4)
+
+
+@pytest.mark.parametrize(
+  "property_name,expected_shape",
+  [
+    # Root properties.
+    ("root_link_pose_w", (1, 7)),
+    ("root_link_pos_w", (1, 3)),
+    ("root_link_quat_w", (1, 4)),
+    ("root_link_vel_w", (1, 6)),
+    ("root_link_lin_vel_w", (1, 3)),
+    ("root_link_ang_vel_w", (1, 3)),
+    ("root_com_pose_w", (1, 7)),
+    ("root_com_pos_w", (1, 3)),
+    ("root_com_quat_w", (1, 4)),
+    ("root_com_vel_w", (1, 6)),
+    ("root_com_lin_vel_w", (1, 3)),
+    ("root_com_ang_vel_w", (1, 3)),
+    # Body properties (we only have 1 body in this test).
+    ("body_link_pose_w", (1, 1, 7)),
+    ("body_link_pos_w", (1, 1, 3)),
+    ("body_link_quat_w", (1, 1, 4)),
+    ("body_link_vel_w", (1, 1, 6)),
+    ("body_com_pose_w", (1, 1, 7)),
+    ("body_com_vel_w", (1, 1, 6)),
+  ],
+)
+def test_entity_data_properties_accessible(device, property_name, expected_shape):
+  """Test that all EntityData properties can be accessed without errors."""
+  entity = create_floating_base_entity()
+  entity, sim = initialize_entity_with_sim(entity, device)
+
+  sim.forward()
+
+  value = getattr(entity.data, property_name)
+  assert value.shape == expected_shape, f"{property_name} has unexpected shape"
