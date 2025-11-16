@@ -115,31 +115,44 @@ DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
 DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
 
 # Asimov joint actuator configuration
-# Hip pitch and hip yaw use 7520_14 actuators
-ASIMOV_ACTUATOR_HIP_PITCH_YAW = ActuatorCfg(
-  joint_names_expr=(".*_hip_pitch_joint", ".*_hip_yaw_joint"),
-  effort_limit=ACTUATOR_7520_14.effort_limit,
+# Updated with torque limits from encos based on current limits:
+# [55, 90, 60, 50, 36, 36, 55, 90, 60, 50, 36, 36]
+# Order: hip_pitch, hip_roll, hip_yaw, knee, ankle_pitch, ankle_roll (per leg)
+
+# Hip pitch joints - 55 Nm
+ASIMOV_ACTUATOR_HIP_PITCH = ActuatorCfg(
+  joint_names_expr=(".*_hip_pitch_joint",),
+  effort_limit=55.0,
   armature=ACTUATOR_7520_14.reflected_inertia,
   stiffness=STIFFNESS_7520_14,
   damping=DAMPING_7520_14,
 )
 
-# Hip roll and knee use 7520_22 actuators (more powerful)
-ASIMOV_ACTUATOR_HIP_ROLL_KNEE = ActuatorCfg(
-  joint_names_expr=(".*_hip_roll_joint", ".*_knee_joint"),
-  effort_limit=ACTUATOR_7520_22.effort_limit,
+# Hip roll joints - 90 Nm
+ASIMOV_ACTUATOR_HIP_ROLL = ActuatorCfg(
+  joint_names_expr=(".*_hip_roll_joint",),
+  effort_limit=90.0,
   armature=ACTUATOR_7520_22.reflected_inertia,
   stiffness=STIFFNESS_7520_22,
   damping=DAMPING_7520_22,
 )
 
-# Ankle joints - using doubled 5020 actuators for parallel linkage
-ASIMOV_ACTUATOR_ANKLE = ActuatorCfg(
-  joint_names_expr=(".*_ankle_pitch_joint", ".*_ankle_roll_joint"),
-  effort_limit=ACTUATOR_5020.effort_limit * 2,
-  armature=ACTUATOR_5020.reflected_inertia * 2,
-  stiffness=STIFFNESS_5020 * 2,
-  damping=DAMPING_5020 * 2,
+# Hip yaw joints - 60 Nm
+ASIMOV_ACTUATOR_HIP_YAW = ActuatorCfg(
+  joint_names_expr=(".*_hip_yaw_joint",),
+  effort_limit=60.0,
+  armature=ACTUATOR_7520_14.reflected_inertia,
+  stiffness=STIFFNESS_7520_14,
+  damping=DAMPING_7520_14,
+)
+
+# Knee joints - 50 Nm
+ASIMOV_ACTUATOR_KNEE = ActuatorCfg(
+  joint_names_expr=(".*_knee_joint",),
+  effort_limit=50.0,
+  armature=ACTUATOR_7520_22.reflected_inertia,
+  stiffness=STIFFNESS_7520_22,
+  damping=DAMPING_7520_22,
 )
 
 # Toe joints - passive spring with low control authority
@@ -245,8 +258,10 @@ FEET_ONLY_COLLISION = CollisionCfg(
 
 ASIMOV_ARTICULATION = EntityArticulationInfoCfg(
   actuators=(
-    ASIMOV_ACTUATOR_HIP_PITCH_YAW,
-    ASIMOV_ACTUATOR_HIP_ROLL_KNEE,
+    ASIMOV_ACTUATOR_HIP_PITCH,
+    ASIMOV_ACTUATOR_HIP_ROLL,
+    ASIMOV_ACTUATOR_HIP_YAW,
+    ASIMOV_ACTUATOR_KNEE,
     ASIMOV_TOE_ACTUATOR,
   ),
   soft_joint_pos_limit_factor=0.9,

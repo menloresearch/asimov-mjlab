@@ -196,11 +196,12 @@
   </tendon>
 
   <!-- Tendon position actuators for A/B control (length targets in meters) -->
+  <!-- Forcerange set to 36 Nm based on encos current limits -->
   <actuator>
-    <position name="left_ankle_A"  tendon="left_ankle_A"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
-    <position name="left_ankle_B"  tendon="left_ankle_B"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
-    <position name="right_ankle_A" tendon="right_ankle_A" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
-    <position name="right_ankle_B" tendon="right_ankle_B" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08"/>
+    <position name="left_ankle_A"  tendon="left_ankle_A"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08" forcerange="-72 72"/>
+    <position name="left_ankle_B"  tendon="left_ankle_B"  kp="300" ctrllimited="true" ctrlrange="-0.08 0.08" forcerange="-72 72"/>
+    <position name="right_ankle_A" tendon="right_ankle_A" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08" forcerange="-72 72"/>
+    <position name="right_ankle_B" tendon="right_ankle_B" kp="300" ctrllimited="true" ctrlrange="-0.08 0.08" forcerange="-72 72"/>
   </actuator>
 
 
