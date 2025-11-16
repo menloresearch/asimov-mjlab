@@ -7,6 +7,7 @@ from mjlab.asset_zoo.robots.asimov.asimov_toe_constants import (
   get_asimov_robot_cfg,
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.envs.mdp.actions import (
   JointPositionActionCfg,
   AnklePrToTendonActionCfg,
@@ -157,6 +158,69 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
       d=0.02,
     ),
   }
+
+  # Customize observations:
+  # - Remove any linear velocity term.
+  # - Exclude toe joints from joint_pos / joint_vel (keep 12 main leg joints).
+  # - Ensure policy observation ordering matches expected layout.
+  assert cfg.observations is not None
+  assert "policy" in cfg.observations
+  assert "critic" in cfg.observations
+  policy_obs = cfg.observations["policy"]
+  critic_obs = cfg.observations["critic"]
+
+  # Remove linear velocity observation if present.
+  policy_obs.terms.pop("base_lin_vel", None)
+  critic_obs.terms.pop("base_lin_vel", None)
+
+  # Restrict joint observations to 12 non-toe joints.
+  joint_asset_cfg = SceneEntityCfg(
+    "robot",
+    joint_names=(
+      "left_hip_pitch_joint",
+      "left_hip_roll_joint",
+      "left_hip_yaw_joint",
+      "left_knee_joint",
+      "left_ankle_pitch_joint",
+      "left_ankle_roll_joint",
+      "right_hip_pitch_joint",
+      "right_hip_roll_joint",
+      "right_hip_yaw_joint",
+      "right_knee_joint",
+      "right_ankle_pitch_joint",
+      "right_ankle_roll_joint",
+    ),
+  )
+  for terms in (policy_obs.terms, critic_obs.terms):
+    for name in ("joint_pos", "joint_vel"):
+      if name in terms:
+        terms[name].params["asset_cfg"] = joint_asset_cfg
+
+  # Rename the command observation to velocity_commands for clarity.
+  if "command" in policy_obs.terms:
+    policy_obs.terms["velocity_commands"] = policy_obs.terms.pop("command")
+  if "command" in critic_obs.terms:
+    critic_obs.terms["velocity_commands"] = critic_obs.terms.pop("command")
+
+  # Reorder policy terms to match the desired layout:
+  # base_ang_vel (3), projected_gravity (3), velocity_commands (3),
+  # joint_pos (12), joint_vel (12), actions (12).
+  ordered_policy_terms = {}
+  for name in (
+    "base_ang_vel",
+    "projected_gravity",
+    "velocity_commands",
+    "joint_pos",
+    "joint_vel",
+    "actions",
+  ):
+    if name in policy_obs.terms:
+      ordered_policy_terms[name] = policy_obs.terms[name]
+  # Append any remaining terms (if present) to preserve them.
+  for name, term in policy_obs.terms.items():
+    if name not in ordered_policy_terms:
+      ordered_policy_terms[name] = term
+  policy_obs.terms = ordered_policy_terms
 
   return cfg
 

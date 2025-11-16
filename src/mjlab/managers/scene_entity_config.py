@@ -124,12 +124,16 @@ class SceneEntityCfg:
     elif isinstance(ids, list):
       self._resolve_ids_to_names(ids, entity_all_names, config.names_attr)
 
-  def _normalize_to_list(self, value: str | int | list | None) -> list | None:
+  def _normalize_to_list(
+    self, value: str | int | list | tuple | None
+  ) -> list | None:
     """Convert single values to lists for uniform processing."""
     if value is None:
       return None
     if isinstance(value, (str, int)):
       return [value]
+    if isinstance(value, tuple):
+      return list(value)
     return value
 
   def _validate_consistency(
