@@ -143,6 +143,9 @@ class ManagerBasedRlEnv(ManagerBasedEnv, gym.Env):
 
     self.obs_buf = self.observation_manager.compute(update_history=True)
 
+    # Log variable impedance gains if available.
+    self._log_variable_impedance_gains()
+
     return (
       self.obs_buf,
       self.reward_buf,
@@ -243,3 +246,26 @@ class ManagerBasedRlEnv(ManagerBasedEnv, gym.Env):
     self.extras["log"].update(info)
     # reset the episode length buffer.
     self.episode_length_buf[env_ids] = 0
+
+  def _log_variable_impedance_gains(self) -> None:
+    """Log variable impedance gain scales to extras for monitoring."""
+    if "log" not in self.extras:
+      self.extras["log"] = dict()
+
+    # Iterate through action terms and log gain scales if available.
+    for action_name, action_term in self.action_manager._terms.items():
+      if hasattr(action_term, "kp_scales") and hasattr(action_term, "kd_scales"):
+        kp = action_term.kp_scales
+        kd = action_term.kd_scales
+
+        if kp is not None and kd is not None:
+          # Log mean gain scales across all envs.
+          if hasattr(action_term, "_num_groups") and action_term._num_groups > 0:
+            # Log per-group gains.
+            for group_idx in range(action_term._num_groups):
+              self.extras["log"][f"Gains/{action_name}_kp_scale_group{group_idx}"] = (
+                kp[:, group_idx].mean().item()
+              )
+              self.extras["log"][f"Gains/{action_name}_kd_scale_group{group_idx}"] = (
+                kd[:, group_idx].mean().item()
+              )

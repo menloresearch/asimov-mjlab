@@ -23,6 +23,35 @@ class JointPositionActionCfg(JointActionCfg):
   use_default_offset: bool = True
 
 
+@dataclass(kw_only=True)
+class VariableImpedanceJointPositionActionCfg(JointActionCfg):
+  """Joint position action with per-group variable stiffness and damping.
+
+  The action space includes:
+  - Position targets for each joint
+  - Stiffness scale per actuator group
+  - Damping scale per actuator group
+
+  Example:
+    stiffness_groups = {
+      "hip_pitch_yaw": [r".*hip_pitch.*", r".*hip_yaw.*"],
+      "hip_roll_knee": [r".*hip_roll.*", r".*knee.*"],
+    }
+  """
+
+  class_type: type[ActionTerm] = joint_actions.VariableImpedanceJointPositionAction
+  use_default_offset: bool = True
+
+  stiffness_groups: dict[str, list[str]]
+  """Dictionary mapping group names to lists of actuator regex patterns."""
+
+  stiffness_scale_range: tuple[float, float] = (0.1, 2.0)
+  """Valid range for stiffness scale factors. Defaults to (0.1, 2.0)."""
+
+  damping_scale_range: tuple[float, float] = (0.1, 2.0)
+  """Valid range for damping scale factors. Defaults to (0.1, 2.0)."""
+
+
 #
 # Ankle AB (tendon) action mapping configuration
 #
@@ -75,3 +104,34 @@ class AnklePrToTendonActionCfg(ActionTermCfg):
   from mjlab.envs.mdp.actions.ankle_ab_action import AnklePrToTendonAction
 
   class_type: type[ActionTerm] = AnklePrToTendonAction
+
+
+@dataclass(kw_only=True)
+class VariableImpedanceAnklePrToTendonActionCfg(AnklePrToTendonActionCfg):
+  """Ankle PR->AB action with per-group variable stiffness and damping.
+
+  The action space includes:
+  - PR position targets (4 values)
+  - Stiffness scale per actuator group
+  - Damping scale per actuator group
+
+  Example (single group for all 4 tendons):
+    stiffness_groups = {
+      "ankle_tendons": [r".*ankle_[AB]"],
+    }
+  """
+
+  from mjlab.envs.mdp.actions.ankle_ab_action import (
+    VariableImpedanceAnklePrToTendonAction,
+  )
+
+  class_type: type[ActionTerm] = VariableImpedanceAnklePrToTendonAction
+
+  stiffness_groups: dict[str, list[str]]
+  """Dictionary mapping group names to lists of actuator regex patterns."""
+
+  stiffness_scale_range: tuple[float, float] = (0.1, 2.0)
+  """Valid range for stiffness scale factors. Defaults to (0.1, 2.0)."""
+
+  damping_scale_range: tuple[float, float] = (0.1, 2.0)
+  """Valid range for damping scale factors. Defaults to (0.1, 2.0)."""

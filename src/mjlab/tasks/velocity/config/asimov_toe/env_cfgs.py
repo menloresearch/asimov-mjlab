@@ -11,6 +11,8 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.envs.mdp.actions import (
   JointPositionActionCfg,
   AnklePrToTendonActionCfg,
+  VariableImpedanceJointPositionActionCfg,
+  VariableImpedanceAnklePrToTendonActionCfg,
 )
 from mjlab.sensor import ContactMatch, ContactSensorCfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
@@ -126,18 +128,35 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
   twist_cmd.ranges.lin_vel_y = (0.0, 0.0)   # No lateral movement initially
   twist_cmd.ranges.ang_vel_z = (-0.8, 0.8)  # Wider turning range
 
-  # Override actions to use ankle PR->AB mechanism and exclude ankles/toes from joint_pos.
+  # Override actions to use ankle PR->AB mechanism with variable impedance control.
   # - joint_pos controls all actuators except ankle and toe joints
   # - ankle_ab maps [L_pitch, L_roll, R_pitch, R_roll] -> [L_A, L_B, R_A, R_B]
+  # Action space breakdown:
+  #   - Joint positions (12 for hips/knees)
+  #   - Joint kp_scale (2 groups: hip_pitch_yaw, hip_roll_knee)
+  #   - Joint kd_scale (2 groups)
+  #   - Ankle PR positions (4)
+  #   - Ankle kp_scale (1 group)
+  #   - Ankle kd_scale (1 group)
+  # Total: 12 + 2 + 2 + 4 + 1 + 1 = 22
   cfg.actions = {
-    "joint_pos": JointPositionActionCfg(
+    "joint_pos": VariableImpedanceJointPositionActionCfg(
       asset_name="robot",
       actuator_names=(r"^(?!.*(ankle|toe)).*$",),  # exclude ankles and toes
       scale=action_scale_non_ankle_toe,
       use_default_offset=True,
       preserve_order=True,
+      # Define actuator groups for variable impedance.
+      # Group 1: Hip pitch/yaw joints (7520_14 motors: kp=25.71, kd=1.84)
+      # Group 2: Hip roll/knee joints (7520_22 motors: kp=63.42, kd=4.54)
+      stiffness_groups={
+        "hip_pitch_yaw": [r".*hip_pitch.*", r".*hip_yaw.*"],
+        "hip_roll_knee": [r".*hip_roll.*", r".*knee.*"],
+      },
+      stiffness_scale_range=(0.7, 1.3),
+      damping_scale_range=(0.7, 1.3),
     ),
-    "ankle_ab": AnklePrToTendonActionCfg(
+    "ankle_ab": VariableImpedanceAnklePrToTendonActionCfg(
       asset_name="robot",
       # Inputs (PR) identified via joint names for scaling/offsets
       left_pitch_joint="left_ankle_pitch_joint",
@@ -156,6 +175,12 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
       # Geometry mapping parameters based on foot geometry
       L=0.09,
       d=0.02,
+      # Define single group for all 4 ankle tendons (kp=300)
+      stiffness_groups={
+        "ankle_tendons": [r".*ankle_[AB]"],
+      },
+      stiffness_scale_range=(0.7, 1.3),
+      damping_scale_range=(0.7, 1.3),
     ),
   }
 
