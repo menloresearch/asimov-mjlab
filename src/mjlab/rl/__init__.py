@@ -4,6 +4,7 @@ from mjlab.rl.config import (
   RslRlPpoActorCriticCfg,
   RslRlPpoAlgorithmCfg,
 )
+from mjlab.rl.onnx_policy import OnnxPolicy
 from mjlab.rl.vecenv_wrapper import RslRlVecEnvWrapper
 
 __all__ = (
@@ -12,4 +13,5 @@ __all__ = (
   "RslRlBaseRunnerCfg",
   "RslRlOnPolicyRunnerCfg",
   "RslRlVecEnvWrapper",
+  "OnnxPolicy",
 )

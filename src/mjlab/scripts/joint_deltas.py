@@ -13,7 +13,7 @@ import tyro
 from rsl_rl.runners import OnPolicyRunner
 
 from mjlab.envs import ManagerBasedRlEnvCfg
-from mjlab.rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
+from mjlab.rl import OnnxPolicy, RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
 from mjlab.tasks.tracking.rl import MotionTrackingOnPolicyRunner
 from mjlab.third_party.isaaclab.isaaclab_tasks.utils.parse_cfg import (
@@ -26,8 +26,10 @@ from mjlab.viewer.base import EnvProtocol
 
 @dataclass(frozen=True)
 class AnalyzeConfig:
-  checkpoint_file: str
-  """Path to the trained checkpoint file (.pt)."""
+  checkpoint_file: str | None = None
+  """Path to the trained checkpoint file (.pt). Required if not using --onnx-file."""
+  onnx_file: str | None = None
+  """Path to ONNX model file (.onnx). Alternative to --checkpoint-file."""
   num_steps: int = 1000
   """Number of steps to collect data."""
   num_envs: int = 1
@@ -112,11 +114,23 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
     and isinstance(env_cfg.commands["motion"], MotionCommandCfg)
   )
 
-  # Load checkpoint
-  resume_path = Path(cfg.checkpoint_file)
-  if not resume_path.exists():
-    raise FileNotFoundError(f"Checkpoint file not found: {resume_path}")
-  log_dir = resume_path.parent
+  # Validate input files
+  ONNX_MODE = cfg.onnx_file is not None
+  CHECKPOINT_MODE = cfg.checkpoint_file is not None
+
+  if not ONNX_MODE and not CHECKPOINT_MODE:
+    raise ValueError("Either --checkpoint-file or --onnx-file must be provided")
+  if ONNX_MODE and CHECKPOINT_MODE:
+    raise ValueError("Cannot use both --checkpoint-file and --onnx-file. Choose one.")
+
+  # Load checkpoint or ONNX
+  if CHECKPOINT_MODE:
+    resume_path = Path(cfg.checkpoint_file)
+    if not resume_path.exists():
+      raise FileNotFoundError(f"Checkpoint file not found: {resume_path}")
+    log_dir = resume_path.parent
+  else:
+    log_dir = Path(".")  # Dummy log_dir for ONNX mode
 
   # Set num_envs
   if cfg.num_envs is not None:
@@ -126,19 +140,27 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
   env = gym.make(task, cfg=env_cfg, device=device, render_mode=None)
   env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
 
-  # Load policy - same as play.py
-  if is_tracking_task:
-    runner = MotionTrackingOnPolicyRunner(
-      env, asdict(agent_cfg), log_dir=str(log_dir), device=device
-    )
+  # Load policy
+  if ONNX_MODE:
+    # Load ONNX policy
+    onnx_path = Path(cfg.onnx_file)
+    if not onnx_path.exists():
+      raise FileNotFoundError(f"ONNX file not found: {onnx_path}")
+    print(f"[INFO]: Loading ONNX model: {onnx_path.name}")
+    policy = OnnxPolicy(str(onnx_path), device=device)
   else:
-    runner = OnPolicyRunner(
-      env, asdict(agent_cfg), log_dir=str(log_dir), device=device
-    )
-  runner.load(str(resume_path), map_location=device)
-  policy = runner.get_inference_policy(device=device)
-
-  print(f"[INFO]: Loaded checkpoint: {resume_path.name}")
+    # Load PyTorch checkpoint - same as play.py
+    if is_tracking_task:
+      runner = MotionTrackingOnPolicyRunner(
+        env, asdict(agent_cfg), log_dir=str(log_dir), device=device
+      )
+    else:
+      runner = OnPolicyRunner(
+        env, asdict(agent_cfg), log_dir=str(log_dir), device=device
+      )
+    runner.load(str(resume_path), map_location=device)
+    policy = runner.get_inference_policy(device=device)
+    print(f"[INFO]: Loaded checkpoint: {resume_path.name}")
   print(f"[INFO]: Running for {cfg.num_steps} steps with {cfg.num_envs} environment(s)")
 
   # Get robot entity
