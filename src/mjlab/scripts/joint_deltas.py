@@ -42,10 +42,14 @@ class AnalyzeConfig:
   """Viewer backend: none (headless analysis), auto (detect display), native (mujoco), viser (web-based)."""
   forward_speed: float = 0.8
   """Forward walking speed in m/s (default: 0.8)."""
-  skip_initial_steps: int = 200
+  skip_initial_steps: int = 0
   """Number of initial steps to skip (to remove initialization transients)."""
-  skip_final_steps: int = 200
+  skip_final_steps: int = 0
   """Number of final steps to skip (to remove end transients)."""
+  data_source: Literal["joint_pos", "actions_obs", "policy_output"] = "joint_pos"
+  """Data source: 'joint_pos' (actual positions), 'actions_obs' (previous actions from obs), 'policy_output' (fresh policy commands - smoothest)."""
+  compare_csv: str | None = None
+  """Path to imitation CSV file to compare with policy outputs (optional)."""
 
 
 def _apply_play_env_overrides(cfg: ManagerBasedRlEnvCfg, forward_speed: float = 0.8) -> None:
@@ -152,6 +156,20 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
   print(f"[INFO]: Filtering to {num_actuated_joints} actuated joints (excluding toe joints)")
   print(f"[INFO]: Actuated joints: {actuated_joint_names}")
 
+  # Get control frequency from environment
+  env_unwrapped = env.unwrapped
+  if hasattr(env_unwrapped, 'step_dt'):
+    control_dt = env_unwrapped.step_dt
+  elif hasattr(env_unwrapped, 'dt'):
+    control_dt = env_unwrapped.dt
+  else:
+    # Default assumption for MuJoCo RL environments
+    control_dt = 0.02  # 50Hz default
+
+  control_freq = 1.0 / control_dt
+  print(f"[INFO]: Environment control frequency: {control_freq:.1f} Hz (dt={control_dt:.4f}s)")
+  print(f"[INFO]: Recording at EVERY timestep (no decimation) - same as Ariel's logging approach")
+
   # If viewer is requested, run viewer and skip analysis
   if cfg.viewer != "none":
     print(f"[INFO]: Running viewer mode (--viewer {cfg.viewer})")
@@ -181,34 +199,95 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
   # Reset environment
   obs, _ = env.reset()
 
+  # Get observation structure dynamically from the observation manager (like Ariel's code)
+  obs_manager = env.unwrapped.observation_manager
+  obs_group = "policy"  # The observation group we're using
+
+  # Extract term names and dimensions dynamically
+  obs_term_names = obs_manager._group_obs_term_names[obs_group]
+  obs_term_dims = obs_manager._group_obs_term_dim[obs_group]
+
+  # Create a mapping of term names to their index ranges
+  obs_term_indices = {}
+  current_idx = 0
+  for term_name, term_dim in zip(obs_term_names, obs_term_dims):
+    term_size = int(torch.tensor(term_dim).prod())  # Handle multi-dimensional terms
+    obs_term_indices[term_name] = (current_idx, current_idx + term_size)
+    current_idx += term_size
+
+  print(f"[INFO]: Observation structure for group '{obs_group}':")
+  for term_name, (start_idx, end_idx) in obs_term_indices.items():
+    print(f"  {term_name}: indices [{start_idx}:{end_idx}]")
+
+  # Determine which observation term to extract based on data_source
+  if cfg.data_source == "policy_output":
+    data_indices = None  # Will extract from policy output directly
+    print("[INFO]: Extracting POLICY OUTPUT (fresh policy commands)")
+  elif cfg.data_source == "actions_obs":
+    if "actions" in obs_term_indices:
+      data_indices = obs_term_indices["actions"]
+      print(f"[INFO]: Extracting ACTIONS from observation indices {data_indices[0]}:{data_indices[1]} (previous actions)")
+    else:
+      raise ValueError("'actions' term not found in observations")
+  else:  # joint_pos
+    if "joint_pos" in obs_term_indices:
+      data_indices = obs_term_indices["joint_pos"]
+      print(f"[INFO]: Extracting JOINT_POS from observation indices {data_indices[0]}:{data_indices[1]} (actual positions)")
+    else:
+      raise ValueError("'joint_pos' term not found in observations")
+
+  print(f"[INFO]: Data source: {cfg.data_source}")
+
   # Collect data
   print("[INFO]: Collecting data (headless mode)...")
   for step in range(cfg.num_steps):
     if step % 100 == 0:
-      print(f"  Step {step}/{cfg.num_steps}")
-
-    # Get current joint positions
-    joint_pos = robot.data.joint_pos.clone().cpu().numpy()
-    joint_positions_history.append(joint_pos)
+      print(f"  Step {step}/{cfg.num_steps} (recording {len(joint_positions_history)} samples)")
 
     # Get action from policy
     with torch.no_grad():
       action = policy(obs)
+
+    # Record at EVERY timestep (no decimation - same as Ariel's approach)
+    if cfg.data_source == "policy_output":
+      # Extract fresh policy output (smoothest - what the policy just commanded)
+      data_to_log = action.clone().cpu().numpy()
+      joint_positions_history.append(data_to_log)
+    else:
+      # Extract data from observation (either joint_pos or previous actions)
+      # Handle TensorDict, dict, or direct tensor
+      if hasattr(obs, 'get'):
+        policy_obs = obs.get("policy", obs)
+      else:
+        policy_obs = obs
+
+      # Extract data from observation
+      if isinstance(policy_obs, torch.Tensor):
+        # Extract data based on configured source
+        data_from_obs = policy_obs[:, data_indices[0]:data_indices[1]].clone().cpu().numpy()
+        joint_positions_history.append(data_from_obs)
+      else:
+        raise RuntimeError(
+          f"Unexpected policy observation type: {type(policy_obs)}. "
+          f"Expected torch.Tensor but got {type(policy_obs)}. "
+          f"Full observation type: {type(obs)}"
+        )
 
     # Step environment
     obs, _, _, _ = env.step(action)
 
   env.close()
 
-  print("[INFO]: Data collection complete. Computing joint deltas...")
+  print(f"[INFO]: Data collection complete. Computing {cfg.data_source} deltas...")
 
-  # Convert to numpy array: (num_steps, num_envs, num_joints)
+  # Convert to numpy array: (num_recorded_steps, num_envs, num_actuated_joints)
+  # Note: We already filtered to actuated joints during data collection
   joint_positions_history = np.array(joint_positions_history)
 
-  # Filter to only actuated joints
-  joint_positions_history = joint_positions_history[:, :, actuated_joint_indices]
+  print(f"[INFO]: Collected {joint_positions_history.shape[0]} samples at {control_freq:.1f} Hz (every timestep)")
+  print(f"[INFO]: Data source: {cfg.data_source}")
 
-  # Compute joint deltas
+  # Compute deltas
   joint_deltas = np.diff(joint_positions_history, axis=0)
   joint_deltas_flat = joint_deltas.reshape(-1, num_actuated_joints)
 
@@ -347,6 +426,96 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
     plt.savefig(output_path / "joint_deltas_histogram.png", dpi=150)
     print(f"[INFO]: Saved histogram to {output_path / 'joint_deltas_histogram.png'}")
     plt.close()
+
+    # 3. Comparison with imitation CSV (if provided)
+    if cfg.compare_csv is not None:
+      print(f"[INFO]: Generating comparison with imitation data from {cfg.compare_csv}...")
+
+      # Load CSV
+      import pandas as pd
+      imitation_df = pd.read_csv(cfg.compare_csv)
+
+      # CSV column order: left_hip_pitch, right_hip_pitch, left_hip_roll, right_hip_roll,
+      #                   left_hip_yaw, right_hip_yaw, left_knee, right_knee,
+      #                   left_ankle_pitch, right_ankle_pitch, left_ankle_roll, right_ankle_roll
+      # Our order: left_hip_pitch, left_hip_roll, left_hip_yaw, left_knee, left_ankle_pitch, left_ankle_roll,
+      #            right_hip_pitch, right_hip_roll, right_hip_yaw, right_knee, right_ankle_pitch, right_ankle_roll
+
+      # Reorder columns to match our joint order
+      csv_to_our_order = [0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11]
+      imitation_data = imitation_df.iloc[:, csv_to_our_order].values  # (num_samples, 12)
+
+      # Truncate to same length for comparison
+      min_len = min(len(imitation_data), len(joint_positions_history))
+      imitation_data = imitation_data[:min_len]
+      policy_data = joint_positions_history[:min_len, 0, :]  # (min_len, 12)
+
+      print(f"[INFO]: Comparing {min_len} timesteps")
+      print(f"[INFO]: Imitation data shape: {imitation_data.shape}")
+      print(f"[INFO]: Policy data shape: {policy_data.shape}")
+
+      # Plot comparison
+      num_cols = 1
+      num_rows = num_actuated_joints
+      fig, axes = plt.subplots(num_rows, num_cols, figsize=(10, 2.5 * num_rows))
+      axes = axes.flatten() if num_actuated_joints > 1 else [axes]
+
+      for i, joint_name in enumerate(actuated_joint_names):
+        ax = axes[i]
+
+        # Plot both datasets
+        ax.plot(imitation_data[:, i], linewidth=0.8, alpha=0.7, label='Imitation', color='blue')
+        ax.plot(policy_data[:, i], linewidth=0.8, alpha=0.7, label='Policy', color='orange')
+
+        # Show ranges
+        imitation_range = (np.min(imitation_data[:, i]), np.max(imitation_data[:, i]))
+        policy_range = (np.min(policy_data[:, i]), np.max(policy_data[:, i]))
+
+        ax.set_ylabel(f"{joint_name.replace('_joint', '')}\n"
+                      f"Imit: [{imitation_range[0]:.2f}, {imitation_range[1]:.2f}]\n"
+                      f"Pol: [{policy_range[0]:.2f}, {policy_range[1]:.2f}]",
+                      fontsize=8)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc='upper right', fontsize=6)
+
+        # Only show x-label on bottom plot
+        if i == num_actuated_joints - 1:
+          ax.set_xlabel("timestep")
+        else:
+          ax.set_xticklabels([])
+
+      axes[0].set_title("Imitation vs Policy Comparison", fontsize=10, loc='left')
+
+      plt.tight_layout()
+      plt.savefig(output_path / "imitation_vs_policy_comparison.png", dpi=150)
+      print(f"[INFO]: Saved comparison to {output_path / 'imitation_vs_policy_comparison.png'}")
+      plt.close()
+
+      # Print range comparison table
+      print("\n" + "=" * 100)
+      print("RANGE COMPARISON: Imitation vs Policy")
+      print("=" * 100)
+      print(f"{'Joint':<30} {'Imit Min':>12} {'Imit Max':>12} {'Pol Min':>12} {'Pol Max':>12} {'Match?':>8}")
+      print("-" * 100)
+      for i, joint_name in enumerate(actuated_joint_names):
+        imitation_min = np.min(imitation_data[:, i])
+        imitation_max = np.max(imitation_data[:, i])
+        policy_min = np.min(policy_data[:, i])
+        policy_max = np.max(policy_data[:, i])
+
+        # Check if ranges are similar (within 50% tolerance)
+        range_match = abs(imitation_max - imitation_min - (policy_max - policy_min)) / (imitation_max - imitation_min + 1e-6) < 0.5
+        match_str = "✓" if range_match else "✗"
+
+        print(
+          f"{joint_name:<30} "
+          f"{imitation_min:>12.4f} "
+          f"{imitation_max:>12.4f} "
+          f"{policy_min:>12.4f} "
+          f"{policy_max:>12.4f} "
+          f"{match_str:>8}"
+        )
+      print("=" * 100)
 
   except ImportError:
     print("[WARN]: matplotlib not available, skipping visualization generation")
