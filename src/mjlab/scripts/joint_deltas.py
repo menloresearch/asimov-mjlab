@@ -1,4 +1,4 @@
-"""Script to analyze joint deltas from a trained policy - simplified version based on play.py."""
+"""Script to analyze absolute joint positions from a trained policy - simplified version based on play.py."""
 
 import os
 import sys
@@ -34,7 +34,7 @@ class AnalyzeConfig:
   """Number of parallel environments to run."""
   device: str | None = None
   """Device to run on (default: cuda:0 if available)."""
-  output_dir: str = "./joint_delta_analysis"
+  output_dir: str = "./joint_position_analysis"
   """Directory to save histograms and data."""
   bins: int = 50
   """Number of bins for histograms."""
@@ -278,7 +278,7 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
 
   env.close()
 
-  print(f"[INFO]: Data collection complete. Computing {cfg.data_source} deltas...")
+  print(f"[INFO]: Data collection complete. Processing {cfg.data_source} absolute positions...")
 
   # Convert to numpy array: (num_recorded_steps, num_envs, num_actuated_joints)
   # Note: We already filtered to actuated joints during data collection
@@ -287,11 +287,10 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
   print(f"[INFO]: Collected {joint_positions_history.shape[0]} samples at {control_freq:.1f} Hz (every timestep)")
   print(f"[INFO]: Data source: {cfg.data_source}")
 
-  # Compute deltas
-  joint_deltas = np.diff(joint_positions_history, axis=0)
-  joint_deltas_flat = joint_deltas.reshape(-1, num_actuated_joints)
+  # Flatten absolute positions
+  joint_positions_flat = joint_positions_history.reshape(-1, num_actuated_joints)
 
-  print(f"[INFO]: Computed {joint_deltas_flat.shape[0]} joint delta samples")
+  print(f"[INFO]: Processed {joint_positions_flat.shape[0]} joint position samples")
 
   # Create output directory
   output_path = Path(cfg.output_dir)
@@ -299,31 +298,31 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
 
   # Save raw data
   np.savez(
-    output_path / "joint_deltas.npz",
-    joint_deltas=joint_deltas_flat,
+    output_path / "joint_positions.npz",
+    joint_positions=joint_positions_flat,
     joint_names=actuated_joint_names,
   )
-  print(f"[INFO]: Saved raw data to {output_path / 'joint_deltas.npz'}")
+  print(f"[INFO]: Saved raw data to {output_path / 'joint_positions.npz'}")
 
   # Compute and save statistics (using all data including transients for reference)
   print("[INFO]: Computing statistics...")
   stats = []
   for i, joint_name in enumerate(actuated_joint_names):
-    deltas = joint_deltas_flat[:, i]
+    positions = joint_positions_flat[:, i]
     stats.append({
       "joint": joint_name,
-      "mean": float(np.mean(deltas)),
-      "std": float(np.std(deltas)),
-      "min": float(np.min(deltas)),
-      "max": float(np.max(deltas)),
-      "median": float(np.median(deltas)),
+      "mean": float(np.mean(positions)),
+      "std": float(np.std(positions)),
+      "min": float(np.min(positions)),
+      "max": float(np.max(positions)),
+      "median": float(np.median(positions)),
     })
 
   print(f"[INFO]: Note - plots will skip first {cfg.skip_initial_steps} and last {cfg.skip_final_steps} timesteps to show steady-state walking")
 
   # Print statistics table
   print("\n" + "=" * 80)
-  print("JOINT DELTA STATISTICS")
+  print("JOINT POSITION STATISTICS (ABSOLUTE)")
   print("=" * 80)
   print(f"{'Joint':<30} {'Mean':>10} {'Std':>10} {'Min':>10} {'Max':>10} {'Median':>10}")
   print("-" * 80)
@@ -341,12 +340,12 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
   # Save statistics to CSV
   import csv
 
-  with open(output_path / "joint_delta_stats.csv", "w", newline="") as f:
+  with open(output_path / "joint_position_stats.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["joint", "mean", "std", "min", "max", "median"])
     writer.writeheader()
     writer.writerows(stats)
 
-  print(f"[INFO]: Saved statistics to {output_path / 'joint_delta_stats.csv'}")
+  print(f"[INFO]: Saved statistics to {output_path / 'joint_position_stats.csv'}")
 
   # Generate visualizations (optional - requires matplotlib)
   try:
@@ -393,13 +392,12 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
     print(f"[INFO]: Saved time series to {output_path / 'joint_positions_timeseries.png'}")
     plt.close()
 
-    # 2. Histograms of joint deltas (using steady-state data only)
-    print("[INFO]: Generating joint delta histograms...")
+    # 2. Histograms of joint positions (using steady-state data only)
+    print("[INFO]: Generating joint position histograms...")
 
-    # Compute deltas from steady-state portion only
+    # Get absolute positions from steady-state portion only
     steady_state_positions = joint_positions_history[start_idx:end_idx, :, :]
-    steady_state_deltas = np.diff(steady_state_positions, axis=0)
-    steady_state_deltas_flat = steady_state_deltas.reshape(-1, num_actuated_joints)
+    steady_state_positions_flat = steady_state_positions.reshape(-1, num_actuated_joints)
 
     num_cols = 3
     num_rows = (num_actuated_joints + num_cols - 1) // num_cols
@@ -407,14 +405,14 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
     axes = axes.flatten() if num_actuated_joints > 1 else [axes]
 
     for i, joint_name in enumerate(actuated_joint_names):
-      deltas = steady_state_deltas_flat[:, i]
-      mean_delta = np.mean(deltas)
-      std_delta = np.std(deltas)
+      positions = steady_state_positions_flat[:, i]
+      mean_pos = np.mean(positions)
+      std_pos = np.std(positions)
 
       ax = axes[i]
-      ax.hist(deltas, bins=cfg.bins, alpha=0.7, edgecolor="black")
-      ax.set_title(f"{joint_name}\nμ={mean_delta:.4f}, σ={std_delta:.4f}")
-      ax.set_xlabel("Joint Delta (rad)")
+      ax.hist(positions, bins=cfg.bins, alpha=0.7, edgecolor="black")
+      ax.set_title(f"{joint_name}\nμ={mean_pos:.4f}, σ={std_pos:.4f}")
+      ax.set_xlabel("Joint Position (rad)")
       ax.set_ylabel("Frequency")
       ax.grid(True, alpha=0.3)
 
@@ -423,8 +421,8 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
       axes[i].axis("off")
 
     plt.tight_layout()
-    plt.savefig(output_path / "joint_deltas_histogram.png", dpi=150)
-    print(f"[INFO]: Saved histogram to {output_path / 'joint_deltas_histogram.png'}")
+    plt.savefig(output_path / "joint_positions_histogram.png", dpi=150)
+    print(f"[INFO]: Saved histogram to {output_path / 'joint_positions_histogram.png'}")
     plt.close()
 
     # 3. Comparison with imitation CSV (if provided)
