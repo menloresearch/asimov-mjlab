@@ -154,7 +154,7 @@ def ASIMOV_ROUGH_ENV_CFG() -> ManagerBasedRlEnvCfg:
       offset=0.0,
       use_default_offset=True,
       # Geometry mapping parameters based on foot geometry
-      L=0.09,
+      L=0.04,
       d=0.02,
     ),
   }
