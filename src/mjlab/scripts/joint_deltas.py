@@ -270,6 +270,13 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
     with torch.no_grad():
       action = policy(obs)
 
+    # DEBUG: Print raw NN output for first few steps
+    if step < 5:
+      print(f"\n[DEBUG] Step {step} - Raw NN output:")
+      print(f"  Shape: {action.shape}")
+      print(f"  Values: {action[0].cpu().numpy()}")
+      print(f"  Min: {action.min().item():.4f}, Max: {action.max().item():.4f}, Mean: {action.mean().item():.4f}")
+
     # Record at EVERY timestep (no decimation - same as Ariel's approach)
     if cfg.data_source == "policy_output":
       # Extract fresh policy output (smoothest - what the policy just commanded)
@@ -300,7 +307,24 @@ def run_analysis(task: str, cfg: AnalyzeConfig):
 
   env.close()
 
-  print(f"[INFO]: Data collection complete. Processing {cfg.data_source} absolute positions...")
+  print(f"\n[INFO]: Data collection complete. Processing {cfg.data_source} absolute positions...")
+
+  # Print raw NN output statistics if using policy_output
+  if cfg.data_source == "policy_output" and len(joint_positions_history) > 0:
+    raw_outputs = np.array(joint_positions_history)
+    print(f"\n{'='*80}")
+    print("RAW NN OUTPUT STATISTICS (before any scaling/clipping)")
+    print(f"{'='*80}")
+    print(f"Overall statistics across all joints and timesteps:")
+    print(f"  Min:  {raw_outputs.min():.4f}")
+    print(f"  Max:  {raw_outputs.max():.4f}")
+    print(f"  Mean: {raw_outputs.mean():.4f}")
+    print(f"  Std:  {raw_outputs.std():.4f}")
+    print(f"\nPer-joint statistics (first environment):")
+    for i in range(raw_outputs.shape[2]):
+      joint_data = raw_outputs[:, 0, i]
+      print(f"  Joint {i}: min={joint_data.min():7.4f}, max={joint_data.max():7.4f}, mean={joint_data.mean():7.4f}, std={joint_data.std():.4f}")
+    print(f"{'='*80}\n")
 
   # Convert to numpy array: (num_recorded_steps, num_envs, num_actuated_joints)
   # Note: We already filtered to actuated joints during data collection
