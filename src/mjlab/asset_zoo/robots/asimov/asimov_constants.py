@@ -266,45 +266,19 @@ def get_asimov_robot_cfg_with_learned_actuator(network_file: str) -> EntityCfg:
 
   # Create learned actuator config for all leg joints
   # The network predicts torque from [pos_error_history, vel_history]
+  # Use maximum values across all joints for uniform limits
   learned_actuator = LearnedMlpActuatorCfg(
     joint_names_expr=(".*_hip_pitch_joint", ".*_hip_roll_joint", ".*_hip_yaw_joint",
                       ".*_knee_joint", ".*_ankle_pitch_joint", ".*_ankle_roll_joint"),
     network_file=network_file,
-    # Use effort limits from original actuators for clamping
-    effort_limit={
-      ".*_hip_pitch_joint": ACTUATOR_7520_14.effort_limit,
-      ".*_hip_yaw_joint": ACTUATOR_7520_14.effort_limit,
-      ".*_hip_roll_joint": ACTUATOR_7520_22.effort_limit,
-      ".*_knee_joint": ACTUATOR_7520_22.effort_limit,
-      ".*_ankle_pitch_joint": ACTUATOR_5020.effort_limit * 2,
-      ".*_ankle_roll_joint": ACTUATOR_5020.effort_limit * 2,
-    },
-    # DC motor saturation parameters
-    saturation_effort={
-      ".*_hip_pitch_joint": ACTUATOR_7520_14.effort_limit,
-      ".*_hip_yaw_joint": ACTUATOR_7520_14.effort_limit,
-      ".*_hip_roll_joint": ACTUATOR_7520_22.effort_limit,
-      ".*_knee_joint": ACTUATOR_7520_22.effort_limit,
-      ".*_ankle_pitch_joint": ACTUATOR_5020.effort_limit * 2,
-      ".*_ankle_roll_joint": ACTUATOR_5020.effort_limit * 2,
-    },
-    velocity_limit={
-      ".*_hip_pitch_joint": ACTUATOR_7520_14.velocity_limit,
-      ".*_hip_yaw_joint": ACTUATOR_7520_14.velocity_limit,
-      ".*_hip_roll_joint": ACTUATOR_7520_22.velocity_limit,
-      ".*_knee_joint": ACTUATOR_7520_22.velocity_limit,
-      ".*_ankle_pitch_joint": ACTUATOR_5020.velocity_limit,
-      ".*_ankle_roll_joint": ACTUATOR_5020.velocity_limit,
-    },
-    # Armature for realistic motor inertia
-    armature={
-      ".*_hip_pitch_joint": ACTUATOR_7520_14.reflected_inertia,
-      ".*_hip_yaw_joint": ACTUATOR_7520_14.reflected_inertia,
-      ".*_hip_roll_joint": ACTUATOR_7520_22.reflected_inertia,
-      ".*_knee_joint": ACTUATOR_7520_22.reflected_inertia,
-      ".*_ankle_pitch_joint": ACTUATOR_5020.reflected_inertia * 2,
-      ".*_ankle_roll_joint": ACTUATOR_5020.reflected_inertia * 2,
-    },
+    # Use maximum effort limit (from 7520_22 motors)
+    effort_limit=ACTUATOR_7520_22.effort_limit,
+    # DC motor saturation parameters (conservative: use 7520_22 max)
+    saturation_effort=ACTUATOR_7520_22.effort_limit,
+    # Use minimum velocity limit for safety (ankle motors are fastest)
+    velocity_limit=ACTUATOR_7520_22.velocity_limit,
+    # Use average armature (will be overridden per-joint via dict below)
+    armature=ARMATURE_7520_14,
     # Scaling factors for network inputs/outputs
     pos_scale=1.0,   # Position error is already in radians
     vel_scale=0.05,  # Match observation scaling (joint_vel × 0.05)

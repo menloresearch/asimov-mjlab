@@ -11,7 +11,8 @@ from mjlab.utils.actuator import (
   reflected_inertia_from_two_stage_planetary,
 )
 from mjlab.utils.os import update_assets
-from mjlab.utils.spec_config import ActuatorCfg, CollisionCfg
+from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.utils.spec_config import CollisionCfg
 
 ##
 # MJCF and assets.
@@ -120,7 +121,7 @@ DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
 # Order: hip_pitch, hip_roll, hip_yaw, knee, ankle_pitch, ankle_roll (per leg)
 
 # Hip pitch joints - 55 Nm
-ASIMOV_ACTUATOR_HIP_PITCH = ActuatorCfg(
+ASIMOV_ACTUATOR_HIP_PITCH = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_pitch_joint",),
   effort_limit=55.0,
   armature=ACTUATOR_7520_14.reflected_inertia,
@@ -129,7 +130,7 @@ ASIMOV_ACTUATOR_HIP_PITCH = ActuatorCfg(
 )
 
 # Hip roll joints - 90 Nm
-ASIMOV_ACTUATOR_HIP_ROLL = ActuatorCfg(
+ASIMOV_ACTUATOR_HIP_ROLL = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_roll_joint",),
   effort_limit=90.0,
   armature=ACTUATOR_7520_22.reflected_inertia,
@@ -138,7 +139,7 @@ ASIMOV_ACTUATOR_HIP_ROLL = ActuatorCfg(
 )
 
 # Hip yaw joints - 60 Nm
-ASIMOV_ACTUATOR_HIP_YAW = ActuatorCfg(
+ASIMOV_ACTUATOR_HIP_YAW = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_yaw_joint",),
   effort_limit=60.0,
   armature=ACTUATOR_7520_14.reflected_inertia,
@@ -147,7 +148,7 @@ ASIMOV_ACTUATOR_HIP_YAW = ActuatorCfg(
 )
 
 # Knee joints - 50 Nm
-ASIMOV_ACTUATOR_KNEE = ActuatorCfg(
+ASIMOV_ACTUATOR_KNEE = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_knee_joint",),
   effort_limit=50.0,
   armature=ACTUATOR_7520_22.reflected_inertia,
@@ -156,7 +157,7 @@ ASIMOV_ACTUATOR_KNEE = ActuatorCfg(
 )
 
 # Toe joints - passive spring with low control authority
-ASIMOV_TOE_ACTUATOR = ActuatorCfg(
+ASIMOV_TOE_ACTUATOR = BuiltinPositionActuatorCfg(
   joint_names_expr=("left_toe_joint", "right_toe_joint"),
   effort_limit=5.0,  # From URDF
   armature=0.0001,  # Minimal inertia

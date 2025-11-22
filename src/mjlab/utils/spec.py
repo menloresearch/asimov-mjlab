@@ -84,9 +84,8 @@ def create_position_actuator(
 ) -> mujoco.MjsActuator:
   """Creates a <position> actuator.
 
-  An important note about this actuator is that we set `ctrllimited` to False. This is
-  because we want to allow the policy to output setpoints that are outside the kinematic
-  limits of the joint.
+  The actuator control limits are set to match the joint's kinematic limits to ensure
+  the policy learns to respect physical constraints.
   """
   actuator = spec.add_actuator(name=joint_name, target=joint_name)
 
@@ -101,9 +100,13 @@ def create_position_actuator(
   actuator.biasprm[1] = -stiffness
   actuator.biasprm[2] = -damping
 
-  # Limits.
-  actuator.ctrllimited = False
-  # No ctrlrange needed.
+  # Limits: Set control limits to match joint limits
+  joint = spec.joint(joint_name)
+  if joint.limited:
+    actuator.ctrllimited = True
+    actuator.ctrlrange[:] = joint.range
+  else:
+    actuator.ctrllimited = False
   if effort_limit is not None:
     actuator.forcelimited = True
     actuator.forcerange[:] = np.array([-effort_limit, effort_limit])
