@@ -103,6 +103,17 @@ def ASIMOV_ROUGH_ENV_CFG_LEARNED() -> ManagerBasedRlEnvCfg:
     )
   }
 
+  # SIM2REAL FIX: Remove base_lin_vel observation to match firmware (45 obs instead of 48)
+  # Firmware observation structure: [base_ang_vel(3), projected_gravity(3), command(3),
+  #                                   joint_pos(12), joint_vel(12), actions(12)] = 45
+  assert cfg.observations is not None
+  policy_obs = cfg.observations["policy"]
+  critic_obs = cfg.observations["critic"]
+
+  # Remove base_lin_vel from both policy and critic
+  policy_obs.terms.pop("base_lin_vel", None)
+  critic_obs.terms.pop("base_lin_vel", None)
+
   # Configure visualization
   assert cfg.commands is not None
   twist_cmd = cfg.commands["twist"]
