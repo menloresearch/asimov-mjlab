@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Sequence
 import mujoco_warp as mjwarp
 import torch
 
-from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+from mjlab.utils.lab_api.math import (
   quat_apply,
   quat_apply_inverse,
   quat_from_matrix,
@@ -49,8 +49,6 @@ class EntityData:
   default_root_state: torch.Tensor
   default_joint_pos: torch.Tensor
   default_joint_vel: torch.Tensor
-  default_joint_stiffness: torch.Tensor
-  default_joint_damping: torch.Tensor
 
   default_joint_pos_limits: torch.Tensor
   joint_pos_limits: torch.Tensor
@@ -62,6 +60,10 @@ class EntityData:
   is_fixed_base: bool
   is_articulated: bool
   is_actuated: bool
+
+  joint_pos_target: torch.Tensor
+  joint_vel_target: torch.Tensor
+  joint_effort_target: torch.Tensor
 
   # State dimensions.
   POS_DIM = 3
@@ -187,15 +189,15 @@ class EntityData:
     self.data.mocap_quat[env_ids, self.indexing.mocap_id] = pose[:, 3:7].unsqueeze(1)
 
   def clear_state(self, env_ids: torch.Tensor | slice | None = None) -> None:
-    # Reset external wrenches on bodies and DoFs.
     env_ids = self._resolve_env_ids(env_ids)
     v_slice = self.indexing.free_joint_v_adr
     self.data.qfrc_applied[env_ids, v_slice] = 0.0
     self.data.xfrc_applied[env_ids, self.indexing.body_ids] = 0.0
 
-    # Reset control inputs.
     if self.is_actuated:
-      self.data.ctrl[env_ids, self.indexing.ctrl_ids] = 0.0
+      self.joint_pos_target[env_ids] = 0.0
+      self.joint_vel_target[env_ids] = 0.0
+      self.joint_effort_target[env_ids] = 0.0
 
   def _resolve_env_ids(
     self, env_ids: torch.Tensor | slice | None
@@ -235,7 +237,7 @@ class EntityData:
     quat = self.data.xquat[:, self.indexing.root_body_id]
     body_iquat = self.model.body_iquat[:, self.indexing.root_body_id]
     assert body_iquat is not None
-    quat_w = quat_mul(quat, body_iquat[None])
+    quat_w = quat_mul(quat, body_iquat.squeeze(1))
     return torch.cat([pos_w, quat_w], dim=-1)
 
   @property

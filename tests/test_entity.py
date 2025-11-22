@@ -6,9 +6,9 @@ import pytest
 import torch
 from conftest import get_test_device
 
+from mjlab.actuator import BuiltinPositionActuatorCfg, XmlMotorActuatorCfg
 from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
 from mjlab.sim.sim import Simulation, SimulationCfg
-from mjlab.utils.spec_config import ActuatorCfg
 
 FIXED_BASE_XML = """
 <mujoco>
@@ -72,6 +72,58 @@ FLOATING_BASE_ARTICULATED_XML = """
 </mujoco>
 """
 
+ACTUATOR_ORDER_TEST_XML = """
+<mujoco>
+  <worldbody>
+    <body name="base" pos="0 0 0">
+      <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+      <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+      <joint name="joint_a" axis="1 0 0" range="-1 1"/>
+      <body name="link1" pos="0.2 0 0">
+        <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+        <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+        <joint name="joint_b" axis="0 1 0" range="-1 1"/>
+        <body name="link2" pos="0.2 0 0">
+          <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+          <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+          <joint name="joint_c" axis="0 0 1" range="-1 1"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="act_c" joint="joint_c" kp="10"/>
+    <position name="act_b" joint="joint_b" kp="10"/>
+    <position name="act_a" joint="joint_a" kp="10"/>
+  </actuator>
+</mujoco>
+"""
+
+UNDERACTUATED_XML = """
+<mujoco>
+  <worldbody>
+    <body name="base" pos="0 0 0">
+      <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+      <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+      <joint name="joint_a" axis="1 0 0" range="-1 1"/>
+      <body name="link1" pos="0.2 0 0">
+        <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+        <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+        <joint name="joint_b" axis="0 1 0" range="-1 1"/>
+        <body name="link2" pos="0.2 0 0">
+          <inertial pos="0 0 0" mass="1" diaginertia="0.01 0.01 0.01"/>
+          <geom type="box" size="0.1 0.1 0.1" rgba="0.5 0.5 0.5 1"/>
+          <joint name="joint_c" axis="0 0 1" range="-1 1"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="act_c" joint="joint_c" kp="10"/>
+  </actuator>
+</mujoco>
+"""
+
 
 @pytest.fixture(scope="module")
 def device():
@@ -97,7 +149,7 @@ def create_fixed_articulated_entity():
     spec_fn=lambda: mujoco.MjSpec.from_string(FIXED_BASE_ARTICULATED_XML),
     articulation=EntityArticulationInfoCfg(
       actuators=(
-        ActuatorCfg(
+        BuiltinPositionActuatorCfg(
           joint_names_expr=("joint1", "joint2"),
           effort_limit=1.0,
           stiffness=1.0,
@@ -115,7 +167,7 @@ def create_floating_articulated_entity():
     spec_fn=lambda: mujoco.MjSpec.from_string(FLOATING_BASE_ARTICULATED_XML),
     articulation=EntityArticulationInfoCfg(
       actuators=(
-        ActuatorCfg(
+        BuiltinPositionActuatorCfg(
           joint_names_expr=("joint1", "joint2"),
           effort_limit=1.0,
           stiffness=1.0,
@@ -346,8 +398,11 @@ def test_keyframe_ctrl_maps_joint_pos_to_actuators():
     spec_fn=lambda: mujoco.MjSpec.from_string(FLOATING_BASE_ARTICULATED_XML),
     articulation=EntityArticulationInfoCfg(
       actuators=(
-        ActuatorCfg(
-          joint_names_expr=("joint1", "joint2"),
+        BuiltinPositionActuatorCfg(
+          joint_names_expr=(
+            "joint1",
+            "joint2",
+          ),
           effort_limit=1.0,
           stiffness=1.0,
           damping=1.0,
@@ -369,7 +424,7 @@ def test_keyframe_ctrl_underactuated():
     spec_fn=lambda: mujoco.MjSpec.from_string(FLOATING_BASE_ARTICULATED_XML),
     articulation=EntityArticulationInfoCfg(
       actuators=(
-        ActuatorCfg(
+        BuiltinPositionActuatorCfg(
           joint_names_expr=("joint1",),  # Only one actuator.
           effort_limit=1.0,
           stiffness=1.0,
@@ -413,3 +468,101 @@ def test_fixed_base_mocap_runtime_pose_change(device):
 
   sim.forward()
   assert torch.allclose(entity.data.root_link_pose_w, new_pose, atol=1e-5)
+
+
+def test_find_joints_by_actuator_names_preserves_natural_order(device):
+  """Test that find_joints_by_actuator_names returns joints in natural joint order.
+
+  This is a regression test for a bug where joints were returned in actuator
+  definition order instead of natural joint order, breaking motion tracking tasks.
+  """
+  robot_cfg = EntityCfg(
+    spec_fn=lambda: mujoco.MjSpec.from_string(ACTUATOR_ORDER_TEST_XML),
+    articulation=EntityArticulationInfoCfg(
+      actuators=(XmlMotorActuatorCfg(joint_names_expr=(".*",)),)
+    ),
+  )
+
+  robot = Entity(robot_cfg)
+  robot.compile()
+
+  # Natural joint order should be: joint_a, joint_b, joint_c.
+  assert list(robot.joint_names) == ["joint_a", "joint_b", "joint_c"]
+
+  # Actuator order is: act_c, act_b, act_a (reverse).
+  # But find_joints_by_actuator_names should still return joints in natural order.
+  joint_ids, joint_names = robot.find_joints_by_actuator_names(".*")
+
+  # Critical: joints must be in natural order, not actuator order.
+  assert joint_names == ["joint_a", "joint_b", "joint_c"]
+  assert joint_ids == [0, 1, 2]
+
+  # Verify this differs from actuator order (which is reverse).
+  assert list(robot.actuator_names) == ["act_c", "act_b", "act_a"]
+
+
+def test_ctrl_ids_follow_natural_joint_order(device):
+  """Test that entity.indexing.ctrl_ids are in actuator definition order.
+
+  ctrl_ids follow actuator definition order for simplicity. ONNX export builds
+  the natural joint order mapping where needed.
+  """
+  robot_cfg = EntityCfg(
+    spec_fn=lambda: mujoco.MjSpec.from_string(ACTUATOR_ORDER_TEST_XML),
+    articulation=EntityArticulationInfoCfg(
+      actuators=(XmlMotorActuatorCfg(joint_names_expr=(".*",)),)
+    ),
+  )
+
+  robot = Entity(robot_cfg)
+  mj_model = robot.compile()
+
+  # Create simulation to initialize entity.
+  sim_cfg = SimulationCfg()
+  sim = Simulation(num_envs=1, cfg=sim_cfg, model=mj_model, device=device)
+  robot.initialize(sim.mj_model, sim.model, sim.data, device)
+
+  # Natural joint order: joint_a, joint_b, joint_c.
+  assert list(robot.joint_names) == ["joint_a", "joint_b", "joint_c"]
+
+  # Actuator definition order (from XML): act_c, act_b, act_a.
+  assert list(robot.actuator_names) == ["act_c", "act_b", "act_a"]
+
+  # ctrl_ids should be in actuator definition order (c, b, a).
+  ctrl_ids = robot.indexing.ctrl_ids.cpu().tolist()
+
+  # Map actuator names to their MuJoCo IDs in the compiled model.
+  actuator_name_to_id = {
+    mj_model.actuator(i).name.split("/")[-1]: i for i in range(mj_model.nu)
+  }
+
+  # ctrl_ids should be ordered as: act_c, act_b, act_a (actuator definition order).
+  expected_ctrl_ids = [
+    actuator_name_to_id["act_c"],
+    actuator_name_to_id["act_b"],
+    actuator_name_to_id["act_a"],
+  ]
+  assert ctrl_ids == expected_ctrl_ids
+
+
+def test_find_joints_by_actuator_names_returns_entity_local_indices():
+  """Test that find_joints_by_actuator_names returns entity-local indices."""
+  robot_cfg = EntityCfg(
+    spec_fn=lambda: mujoco.MjSpec.from_string(UNDERACTUATED_XML),
+    articulation=EntityArticulationInfoCfg(
+      actuators=(XmlMotorActuatorCfg(joint_names_expr=(".*",)),)
+    ),
+  )
+
+  robot = Entity(robot_cfg)
+  robot.compile()
+
+  # Natural joint order: joint_a (0), joint_b (1), joint_c (2).
+  assert list(robot.joint_names) == ["joint_a", "joint_b", "joint_c"]
+
+  # Only joint_c has an actuator.
+  joint_ids, joint_names = robot.find_joints_by_actuator_names(".*")
+
+  # Should return entity-local index [2], not subset-local [0].
+  assert joint_names == ["joint_c"]
+  assert joint_ids == [2]  # Index of joint_c in self.joint_names.

@@ -1,13 +1,12 @@
-"""Velocity tracking task configuration.
+"""Velocity task configuration.
 
-This module defines the base configuration for velocity tracking tasks.
-Robot-specific configurations are located in the config/ directory.
+This module provides a factory function to create a base velocity task config.
+Robot-specific configurations call the factory and customize as needed.
 """
 
 import math
-from copy import deepcopy
+from dataclasses import replace
 
-from mjlab.entity.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers.manager_term_config import (
@@ -22,7 +21,6 @@ from mjlab.managers.manager_term_config import (
 )
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.scene import SceneCfg
-from mjlab.sensor import ContactSensorCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.velocity import mdp
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
@@ -31,110 +29,13 @@ from mjlab.terrains.config import ROUGH_TERRAINS_CFG
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 
-SCENE_CFG = SceneCfg(
-  terrain=TerrainImporterCfg(
-    terrain_type="generator",
-    terrain_generator=ROUGH_TERRAINS_CFG,
-    max_init_terrain_level=5,
-  ),
-  num_envs=1,
-  extent=2.0,
-)
 
-VIEWER_CONFIG = ViewerConfig(
-  origin_type=ViewerConfig.OriginType.ASSET_BODY,
-  asset_name="robot",
-  body_name="",  # Override in robot cfg.
-  distance=3.0,
-  elevation=-5.0,
-  azimuth=90.0,
-)
+def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
+  """Create base velocity tracking task configuration."""
 
-SIM_CFG = SimulationCfg(
-  nconmax=50,  # Increased for capsule-based foot collisions (was 35)
-  njmax=300,
-  mujoco=MujocoCfg(
-    timestep=0.005,
-    iterations=10,
-    ls_iterations=20,
-  ),
-)
-
-
-def create_velocity_env_cfg(
-  robot_cfg: EntityCfg,
-  action_scale: float | dict[str, float],
-  viewer_body_name: str,
-  site_names: tuple[str, ...],
-  feet_sensor_cfg: ContactSensorCfg,
-  self_collision_sensor_cfg: ContactSensorCfg,
-  foot_friction_geom_names: tuple[str, ...] | str,
-  posture_std_standing: dict[str, float],
-  posture_std_walking: dict[str, float],
-  posture_std_running: dict[str, float],
-  body_ang_vel_weight: float,
-  angular_momentum_weight: float,
-  self_collision_weight: float,
-  air_time_weight: float,
-) -> ManagerBasedRlEnvCfg:
-  """Create a velocity locomotion task configuration.
-
-  Args:
-    robot_cfg: Robot configuration (with sensors).
-    action_scale: Action scaling factor(s).
-    viewer_body_name: Body for camera tracking.
-    site_names: List of site names for foot height/clearance.
-    feet_sensor_cfg: Contact sensor config for feet-ground contact.
-    self_collision_sensor_cfg: Contact sensor config for self-collision.
-    foot_friction_geom_names: Geometry names for friction randomization.
-    posture_std_standing: Joint std devs for standing posture reward.
-    posture_std_walking: Joint std devs for walking posture reward.
-    posture_std_running: Joint std devs for running posture reward.
-    body_ang_vel_weight: Weight for body angular velocity penalty.
-    angular_momentum_weight: Weight for angular momentum penalty.
-    self_collision_weight: Weight for self-collision cost.
-    air_time_weight: Weight for feet air time reward.
-
-  Returns:
-    Complete ManagerBasedRlEnvCfg for velocity task.
-  """
-  scene = deepcopy(SCENE_CFG)
-  scene.entities = {"robot": robot_cfg}
-  scene.sensors = (feet_sensor_cfg, self_collision_sensor_cfg)
-
-  # Enable curriculum mode for terrain generator.
-  if scene.terrain is not None and scene.terrain.terrain_generator is not None:
-    scene.terrain.terrain_generator.curriculum = True
-
-  viewer = deepcopy(VIEWER_CONFIG)
-  viewer.body_name = viewer_body_name
-
-  actions: dict[str, ActionTermCfg] = {
-    "joint_pos": JointPositionActionCfg(
-      asset_name="robot",
-      actuator_names=(".*",),
-      scale=action_scale,
-      use_default_offset=True,
-    )
-  }
-
-  commands: dict[str, CommandTermCfg] = {
-    "twist": UniformVelocityCommandCfg(
-      asset_name="robot",
-      resampling_time_range=(3.0, 8.0),
-      rel_standing_envs=0.1,
-      rel_heading_envs=0.3,
-      heading_command=True,
-      heading_control_stiffness=0.5,
-      debug_vis=True,
-      ranges=UniformVelocityCommandCfg.Ranges(
-        lin_vel_x=(-1.0, 1.0),
-        lin_vel_y=(-1.0, 1.0),
-        ang_vel_z=(-0.5, 0.5),
-        heading=(-math.pi, math.pi),
-      ),
-    )
-  }
+  ##
+  # Observations
+  ##
 
   policy_terms = {
     "base_lin_vel": ObservationTermCfg(
@@ -174,7 +75,7 @@ def create_velocity_env_cfg(
     **policy_terms,
     "foot_height": ObservationTermCfg(
       func=mdp.foot_height,
-      params={"asset_cfg": SceneEntityCfg("robot", site_names=site_names)},
+      params={"asset_cfg": SceneEntityCfg("robot", site_names=())},  # Set per-robot.
     ),
     "foot_air_time": ObservationTermCfg(
       func=mdp.foot_air_time,
@@ -202,6 +103,45 @@ def create_velocity_env_cfg(
       enable_corruption=False,
     ),
   }
+
+  ##
+  # Actions
+  ##
+
+  actions: dict[str, ActionTermCfg] = {
+    "joint_pos": JointPositionActionCfg(
+      asset_name="robot",
+      actuator_names=(".*",),
+      scale=0.5,  # Override per-robot.
+      use_default_offset=True,
+    )
+  }
+
+  ##
+  # Commands
+  ##
+
+  commands: dict[str, CommandTermCfg] = {
+    "twist": UniformVelocityCommandCfg(
+      asset_name="robot",
+      resampling_time_range=(3.0, 8.0),
+      rel_standing_envs=0.1,
+      rel_heading_envs=0.3,
+      heading_command=True,
+      heading_control_stiffness=0.5,
+      debug_vis=True,
+      ranges=UniformVelocityCommandCfg.Ranges(
+        lin_vel_x=(-1.0, 1.0),
+        lin_vel_y=(-1.0, 1.0),
+        ang_vel_z=(-0.5, 0.5),
+        heading=(-math.pi, math.pi),
+      ),
+    )
+  }
+
+  ##
+  # Events
+  ##
 
   events = {
     "reset_base": EventTermCfg(
@@ -232,13 +172,17 @@ def create_velocity_env_cfg(
       func=mdp.randomize_field,
       domain_randomization=True,
       params={
-        "asset_cfg": SceneEntityCfg("robot", geom_names=foot_friction_geom_names),
+        "asset_cfg": SceneEntityCfg("robot", geom_names=()),  # Set per-robot.
         "operation": "abs",
         "field": "geom_friction",
         "ranges": (0.3, 1.2),
       },
     ),
   }
+
+  ##
+  # Rewards
+  ##
 
   rewards = {
     "track_linear_velocity": RewardTermCfg(
@@ -256,7 +200,7 @@ def create_velocity_env_cfg(
       weight=1.0,
       params={
         "std": math.sqrt(0.2),
-        "asset_cfg": SceneEntityCfg("robot", body_names=(viewer_body_name,)),
+        "asset_cfg": SceneEntityCfg("robot", body_names=()),  # Set per-robot.
       },
     ),
     "pose": RewardTermCfg(
@@ -265,33 +209,28 @@ def create_velocity_env_cfg(
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
         "command_name": "twist",
-        "std_standing": posture_std_standing,
-        "std_walking": posture_std_walking,
-        "std_running": posture_std_running,
+        "std_standing": {},  # Set per-robot.
+        "std_walking": {},  # Set per-robot.
+        "std_running": {},  # Set per-robot.
         "walking_threshold": 0.05,
         "running_threshold": 1.5,
       },
     ),
     "body_ang_vel": RewardTermCfg(
       func=mdp.body_angular_velocity_penalty,
-      weight=body_ang_vel_weight,
-      params={"asset_cfg": SceneEntityCfg("robot", body_names=(viewer_body_name,))},
+      weight=0.0,  # Override per-robot
+      params={"asset_cfg": SceneEntityCfg("robot", body_names=())},  # Set per-robot.
     ),
     "angular_momentum": RewardTermCfg(
       func=mdp.angular_momentum_penalty,
-      weight=angular_momentum_weight,
+      weight=0.0,  # Override per-robot
       params={"sensor_name": "robot/root_angmom"},
     ),
     "dof_pos_limits": RewardTermCfg(func=mdp.joint_pos_limits, weight=-1.0),
-    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),  # Reduced to allow dynamic motion
-    "self_collisions": RewardTermCfg(
-      func=mdp.self_collision_cost,
-      weight=self_collision_weight,
-      params={"sensor_name": "self_collision"},
-    ),
+    "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.1),
     "air_time": RewardTermCfg(
       func=mdp.feet_air_time,
-      weight=air_time_weight,
+      weight=0.0,  # Override per-robot.
       params={
         "sensor_name": "feet_ground_contact",
         "threshold_min": 0.05,
@@ -307,7 +246,7 @@ def create_velocity_env_cfg(
         "target_height": 0.1,
         "command_name": "twist",
         "command_threshold": 0.05,
-        "asset_cfg": SceneEntityCfg("robot", site_names=site_names),
+        "asset_cfg": SceneEntityCfg("robot", site_names=()),  # Set per-robot.
       },
     ),
     "foot_swing_height": RewardTermCfg(
@@ -318,7 +257,7 @@ def create_velocity_env_cfg(
         "target_height": 0.1,
         "command_name": "twist",
         "command_threshold": 0.05,
-        "asset_cfg": SceneEntityCfg("robot", site_names=site_names),
+        "asset_cfg": SceneEntityCfg("robot", site_names=()),  # Set per-robot.
       },
     ),
     "foot_slip": RewardTermCfg(
@@ -328,7 +267,7 @@ def create_velocity_env_cfg(
         "sensor_name": "feet_ground_contact",
         "command_name": "twist",
         "command_threshold": 0.05,
-        "asset_cfg": SceneEntityCfg("robot", site_names=site_names),
+        "asset_cfg": SceneEntityCfg("robot", site_names=()),  # Set per-robot.
       },
     ),
     "soft_landing": RewardTermCfg(
@@ -342,6 +281,10 @@ def create_velocity_env_cfg(
     ),
   }
 
+  ##
+  # Terminations
+  ##
+
   terminations = {
     "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
     "fell_over": TerminationTermCfg(
@@ -349,6 +292,10 @@ def create_velocity_env_cfg(
       params={"limit_angle": math.radians(70.0)},
     ),
   }
+
+  ##
+  # Curriculum
+  ##
 
   curriculum = {
     "terrain_levels": CurriculumTermCfg(
@@ -368,17 +315,44 @@ def create_velocity_env_cfg(
     ),
   }
 
+  ##
+  # Assemble and return
+  ##
+
   return ManagerBasedRlEnvCfg(
-    scene=scene,
+    scene=SceneCfg(
+      terrain=TerrainImporterCfg(
+        terrain_type="generator",
+        terrain_generator=replace(ROUGH_TERRAINS_CFG),
+        max_init_terrain_level=5,
+      ),
+      num_envs=1,
+      extent=2.0,
+    ),
     observations=observations,
     actions=actions,
     commands=commands,
+    events=events,
     rewards=rewards,
     terminations=terminations,
-    events=events,
     curriculum=curriculum,
-    sim=SIM_CFG,
-    viewer=viewer,
+    viewer=ViewerConfig(
+      origin_type=ViewerConfig.OriginType.ASSET_BODY,
+      asset_name="robot",
+      body_name="",  # Set per-robot.
+      distance=3.0,
+      elevation=-5.0,
+      azimuth=90.0,
+    ),
+    sim=SimulationCfg(
+      nconmax=35,
+      njmax=300,
+      mujoco=MujocoCfg(
+        timestep=0.005,
+        iterations=10,
+        ls_iterations=20,
+      ),
+    ),
     decimation=4,
     episode_length_s=20.0,
   )

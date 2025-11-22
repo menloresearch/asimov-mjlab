@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+from mjlab.utils.lab_api.math import (
   matrix_from_quat,
   subtract_frame_transforms,
 )

@@ -9,9 +9,6 @@ Based on https://github.com/HybridRobotics/whole_body_tracking
 Commit: f8e20c880d9c8ec7172a13d3a88a65e3a5a88448
 """
 
-from copy import deepcopy
-
-from mjlab.entity.entity import EntityCfg
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers.manager_term_config import (
@@ -25,7 +22,6 @@ from mjlab.managers.manager_term_config import (
 )
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.scene import SceneCfg
-from mjlab.sensor import ContactSensorCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.tracking import mdp
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
@@ -42,93 +38,13 @@ VELOCITY_RANGE = {
   "yaw": (-0.78, 0.78),
 }
 
-SCENE_CFG = SceneCfg(terrain=TerrainImporterCfg(terrain_type="plane"), num_envs=1)
 
-VIEWER_CONFIG = ViewerConfig(
-  origin_type=ViewerConfig.OriginType.ASSET_BODY,
-  asset_name="robot",
-  body_name="",  # Override in robot cfg.
-  distance=3.0,
-  elevation=-5.0,
-  azimuth=90.0,
-)
+def make_tracking_env_cfg() -> ManagerBasedRlEnvCfg:
+  """Create base tracking task configuration."""
 
-SIM_CFG = SimulationCfg(
-  nconmax=35,
-  njmax=250,
-  mujoco=MujocoCfg(
-    timestep=0.005,
-    iterations=10,
-    ls_iterations=20,
-  ),
-)
-
-
-def create_tracking_env_cfg(
-  robot_cfg: EntityCfg,
-  action_scale: float | dict[str, float],
-  viewer_body_name: str,
-  motion_file: str,
-  anchor_body_name: str,
-  body_names: tuple[str, ...],
-  foot_friction_geom_names: tuple[str, ...],
-  ee_body_names: tuple[str, ...],
-  base_com_body_name: str,
-  sensors: tuple[ContactSensorCfg, ...],
-  pose_range: dict[str, tuple[float, float]],
-  velocity_range: dict[str, tuple[float, float]],
-  joint_position_range: tuple[float, float],
-) -> ManagerBasedRlEnvCfg:
-  """Create a tracking task configuration for motion imitation.
-
-  Args:
-    robot_cfg: Robot configuration.
-    action_scale: Action scaling factor(s).
-    viewer_body_name: Body for camera tracking.
-    motion_file: Path to motion capture data file.
-    anchor_body_name: Root body for motion tracking.
-    body_names: List of body names to track.
-    foot_friction_geom_names: Geometry names for friction randomization.
-    ee_body_names: End-effector body names for termination.
-    base_com_body_name: Body for COM randomization.
-    sensors: Sensor configurations to add to the scene.
-    pose_range: Position/orientation randomization ranges.
-    velocity_range: Velocity randomization ranges.
-    joint_position_range: Joint position randomization range.
-
-  Returns:
-    Complete ManagerBasedRlEnvCfg for tracking task.
-  """
-
-  scene = deepcopy(SCENE_CFG)
-  scene.entities = {"robot": robot_cfg}
-  scene.sensors = sensors
-
-  viewer = deepcopy(VIEWER_CONFIG)
-  viewer.body_name = viewer_body_name
-
-  actions: dict[str, ActionTermCfg] = {
-    "joint_pos": JointPositionActionCfg(
-      asset_name="robot",
-      actuator_names=(".*",),
-      scale=action_scale,
-      use_default_offset=True,
-    )
-  }
-
-  commands: dict[str, CommandTermCfg] = {
-    "motion": MotionCommandCfg(
-      asset_name="robot",
-      resampling_time_range=(1.0e9, 1.0e9),
-      debug_vis=True,
-      pose_range=pose_range,
-      velocity_range=velocity_range,
-      joint_position_range=joint_position_range,
-      motion_file=motion_file,
-      anchor_body_name=anchor_body_name,
-      body_names=body_names,
-    )
-  }
+  ##
+  # Observations
+  ##
 
   policy_terms = {
     "command": ObservationTermCfg(
@@ -203,19 +119,62 @@ def create_tracking_env_cfg(
     ),
   }
 
+  ##
+  # Actions
+  ##
+
+  actions: dict[str, ActionTermCfg] = {
+    "joint_pos": JointPositionActionCfg(
+      asset_name="robot",
+      actuator_names=(".*",),
+      scale=0.5,
+      use_default_offset=True,
+    )
+  }
+
+  ##
+  # Commands
+  ##
+
+  commands: dict[str, CommandTermCfg] = {
+    "motion": MotionCommandCfg(
+      asset_name="robot",
+      resampling_time_range=(1.0e9, 1.0e9),
+      debug_vis=True,
+      pose_range={
+        "x": (-0.05, 0.05),
+        "y": (-0.05, 0.05),
+        "z": (-0.01, 0.01),
+        "roll": (-0.1, 0.1),
+        "pitch": (-0.1, 0.1),
+        "yaw": (-0.2, 0.2),
+      },
+      velocity_range=VELOCITY_RANGE,
+      joint_position_range=(-0.1, 0.1),
+      # Override in robot cfg.
+      motion_file="",
+      anchor_body_name="",
+      body_names=(),
+    )
+  }
+
+  ##
+  # Events
+  ##
+
   events: dict[str, EventTermCfg] = {
     "push_robot": EventTermCfg(
       func=mdp.push_by_setting_velocity,
       mode="interval",
       interval_range_s=(1.0, 3.0),
-      params={"velocity_range": velocity_range},
+      params={"velocity_range": VELOCITY_RANGE},
     ),
     "base_com": EventTermCfg(
       mode="startup",
       func=mdp.randomize_field,
       domain_randomization=True,
       params={
-        "asset_cfg": SceneEntityCfg("robot", body_names=(base_com_body_name,)),
+        "asset_cfg": SceneEntityCfg("robot", body_names=()),  # Set in robot cfg.
         "operation": "add",
         "field": "body_ipos",
         "ranges": {
@@ -241,13 +200,17 @@ def create_tracking_env_cfg(
       func=mdp.randomize_field,
       domain_randomization=True,
       params={
-        "asset_cfg": SceneEntityCfg("robot", geom_names=foot_friction_geom_names),
+        "asset_cfg": SceneEntityCfg("robot", geom_names=()),  # Set per-robot.
         "operation": "abs",
         "field": "geom_friction",
         "ranges": (0.3, 1.2),
       },
     ),
   }
+
+  ##
+  # Rewards
+  ##
 
   rewards: dict[str, RewardTermCfg] = {
     "motion_global_root_pos": RewardTermCfg(
@@ -293,6 +256,10 @@ def create_tracking_env_cfg(
     ),
   }
 
+  ##
+  # Terminations
+  ##
+
   terminations: dict[str, TerminationTermCfg] = {
     "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
     "anchor_pos": TerminationTermCfg(
@@ -312,21 +279,40 @@ def create_tracking_env_cfg(
       params={
         "command_name": "motion",
         "threshold": 0.25,
-        "body_names": ee_body_names,
+        "body_names": (),  # Set per-robot.
       },
     ),
   }
 
+  ##
+  # Assemble and return
+  ##
+
   return ManagerBasedRlEnvCfg(
-    scene=scene,
+    scene=SceneCfg(terrain=TerrainImporterCfg(terrain_type="plane"), num_envs=1),
     observations=observations,
     actions=actions,
     commands=commands,
+    events=events,
     rewards=rewards,
     terminations=terminations,
-    events=events,
-    sim=SIM_CFG,
-    viewer=viewer,
+    viewer=ViewerConfig(
+      origin_type=ViewerConfig.OriginType.ASSET_BODY,
+      asset_name="robot",
+      body_name="",  # Set per-robot.
+      distance=3.0,
+      elevation=-5.0,
+      azimuth=90.0,
+    ),
+    sim=SimulationCfg(
+      nconmax=35,
+      njmax=250,
+      mujoco=MujocoCfg(
+        timestep=0.005,
+        iterations=10,
+        ls_iterations=20,
+      ),
+    ),
     decimation=4,
     episode_length_s=10.0,
   )

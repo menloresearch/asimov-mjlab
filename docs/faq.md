@@ -13,7 +13,7 @@ We recommend Linux with an NVIDIA GPU for serious training workloads.
 ### Does it work on Windows?
 
 We have performed preliminary testing on Windows and WSL, but some workflows
-are not guaranteed to be stable. Windows support may lag behind updates 
+are not guaranteed to be stable. Windows support may lag behind updates
 and will be tested less frequently, as the primary platform targeted is Linux.
 However, community contributions for Windows support are welcome!
 
@@ -37,6 +37,13 @@ On par or faster based on our experience over the last few months.
 
 - RTX 40-series GPUs (or newer)
 - L40s, H100
+
+### Does mjlab support multi-GPU training?
+
+Yes. mjlab supports multi-GPU distributed training with
+[torchrunx](https://github.com/apoorvkh/torchrunx). Use `--gpu-ids 0 1` (or
+`--gpu-ids all`) when running the `train` command. See the [Distributed Training
+guide](api/distributed_training.md) for details.
 
 ---
 

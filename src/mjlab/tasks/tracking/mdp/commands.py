@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from mjlab.managers import CommandTerm, CommandTermCfg
-from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+from mjlab.utils.lab_api.math import (
   matrix_from_quat,
   quat_apply,
   quat_error_magnitude,

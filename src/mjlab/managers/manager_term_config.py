@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, ParamSpec, TypeVar
+from typing import Any, Literal
 
 import torch
 
 from mjlab.managers.action_manager import ActionTerm
 from mjlab.managers.command_manager import CommandTerm
 from mjlab.utils.noise.noise_cfg import NoiseCfg, NoiseModelCfg
-
-P = ParamSpec("P")
-T = TypeVar("T")
-
-
-def term(term_cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
-  return field(default_factory=lambda: term_cls(*args, **kwargs))
 
 
 @dataclass
@@ -121,7 +114,11 @@ class ObservationTermCfg(ManagerTermBaseCfg):
   history_length: int = 0
   """Number of past observations to keep in history. 0 = no history."""
   flatten_history_dim: bool = True
-  """Whether to flatten the history dimension into observation."""
+  """Whether to flatten the history dimension into observation.
+
+  When True and concatenate_terms=True, uses term-major ordering:
+  [A_t0, A_t1, ..., A_tH-1, B_t0, B_t1, ..., B_tH-1, ...]
+  See docs/api/observation_history_delay.md for details on ordering."""
 
 
 @dataclass

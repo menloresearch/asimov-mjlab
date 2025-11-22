@@ -6,7 +6,7 @@ build-backend = "uv_build"
 name = "mjlab"
 version = "0.1.0"
 license = "Apache-2.0"
-license-files = ["LICENSE", "src/mjlab/third_party/isaaclab/LICENSE"]
+license-files = ["LICENSE"]
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
     {name = "The MjLab Developers"},
@@ -19,7 +19,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11", 
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
@@ -31,16 +31,16 @@ classifiers = [
 description = "Isaac Lab API, powered by MuJoCo-Warp, for RL and robotics research."
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "gymnasium==1.2.1",
     "prettytable",
     "tqdm",
-    "tyro",
+    "tyro>=0.10.0a6",
     "torch>=2.7.0",
+    "torchrunx>=0.3.4",
     "warp-lang",
     "mujoco-warp",
-    "mujoco",
+    "mujoco<=3.3.8",
     "trimesh>=4.8.3",
-    "viser>=1.0.15",
+    "viser>=1.0.16",
     "moviepy",
     "tensordict",
     "rsl-rl-lib",
@@ -70,16 +70,14 @@ dev = [
   "ruff>=0.14.3",
   "ty>=0.0.1a23",
 ]
-cpu = ["torch>=2.7.0"]
+
+[project.optional-dependencies]
 cu128 = ["torch>=2.7.0"]
 
 [tool.uv]
-default-groups = ["dev", "cu128"]
-conflicts = [
-  [
-    { group = "cpu" },
-    { group = "cu128" },
-  ],
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [[tool.uv.index]]
@@ -109,25 +107,23 @@ explicit = true
 mujoco-warp = { git = "https://github.com/google-deepmind/mujoco_warp", rev = "e605c406363805d949b75d50dd5ffb3d79bc3f70"}
 warp-lang = { index = "nvidia", marker = "sys_platform != 'darwin'" }
 mujoco = { index = "mujoco" }
-torch = [
-  { index = "pytorch-cpu", group = "cpu" },
-  { index = "pytorch-cu128", group = "cu128" },
-]
+torch = { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform != 'darwin'" }
 
 [tool.ruff]
 src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 2
 exclude = [
-  "src/mjlab/third_party",
+  "src/mjlab/utils/lab_api",
   "typings",
 ]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "B"]
+ignore = ["B011"]
 
 [tool.pyright]
 pythonVersion = "3.10"
-ignore = ["./typings", "./src/mjlab/third_party"]
+ignore = ["./typings", "./src/mjlab/utils/lab_api"]
 stubPath = "typings"
 
 [tool.ty.environment]
@@ -135,7 +131,7 @@ extra-paths = ["typings"]
 
 [tool.ty.src]
 include = ["src", "tests"]
-exclude = ["src/mjlab/third_party", "typings"]
+exclude = ["src/mjlab/utils/lab_api", "typings"]
 
 [tool.pytest.ini_options]
 markers = [

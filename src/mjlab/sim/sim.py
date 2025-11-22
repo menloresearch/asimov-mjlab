@@ -139,12 +139,13 @@ class Simulation:
     self.step_graph = None
     self.forward_graph = None
     if self.use_cuda_graph:
-      with wp.ScopedCapture() as capture:
-        mjwarp.step(self.wp_model, self.wp_data)
-      self.step_graph = capture.graph
-      with wp.ScopedCapture() as capture:
-        mjwarp.forward(self.wp_model, self.wp_data)
-      self.forward_graph = capture.graph
+      with wp.ScopedDevice(self.wp_device):
+        with wp.ScopedCapture() as capture:
+          mjwarp.step(self.wp_model, self.wp_data)
+        self.step_graph = capture.graph
+        with wp.ScopedCapture() as capture:
+          mjwarp.forward(self.wp_model, self.wp_data)
+        self.forward_graph = capture.graph
 
   # Properties.
 

@@ -12,13 +12,13 @@ import pytest
 def test_basic_functionality() -> None:
   """Test that mjlab can create and close an environment."""
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
-  from mjlab.tasks.velocity.config.go1.env_cfgs import UNITREE_GO1_FLAT_ENV_CFG
+  from mjlab.tasks.velocity.config.go1.env_cfgs import unitree_go1_flat_env_cfg
 
   # Suppress env spam.
   with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-      env = ManagerBasedRlEnv(UNITREE_GO1_FLAT_ENV_CFG, device="cpu")
+      env = ManagerBasedRlEnv(unitree_go1_flat_env_cfg(), device="cpu")
       assert env.sim.data.time == 0.0
       env.close()
 

@@ -1,24 +1,26 @@
-"""Unitree G1 flat terrain tracking configuration.
+"""Unitree G1 flat tracking environment configurations."""
 
-This module provides factory functions that create complete ManagerBasedRlEnvCfg
-instances for the G1 robot tracking task on flat terrain.
-"""
-
-from copy import deepcopy
-
-from mjlab.asset_zoo.robots.unitree_g1.g1_constants import (
+from mjlab.asset_zoo.robots import (
   G1_ACTION_SCALE,
   get_g1_robot_cfg,
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.envs.mdp.actions import JointPositionActionCfg
+from mjlab.managers.manager_term_config import ObservationGroupCfg
 from mjlab.sensor import ContactMatch, ContactSensorCfg
-from mjlab.tasks.tracking.tracking_env_cfg import create_tracking_env_cfg
-from mjlab.utils.retval import retval
+from mjlab.tasks.tracking.mdp import MotionCommandCfg
+from mjlab.tasks.tracking.tracking_env_cfg import make_tracking_env_cfg
 
 
-@retval
-def G1_FLAT_TRACKING_ENV_CFG() -> ManagerBasedRlEnvCfg:
+def unitree_g1_flat_tracking_env_cfg(
+  has_state_estimation: bool = True,
+  play: bool = False,
+) -> ManagerBasedRlEnvCfg:
   """Create Unitree G1 flat terrain tracking configuration."""
+  cfg = make_tracking_env_cfg()
+
+  cfg.scene.entities = {"robot": get_g1_robot_cfg()}
+
   self_collision_cfg = ContactSensorCfg(
     name="self_collision",
     primary=ContactMatch(mode="subtree", pattern="pelvis", entity="robot"),
@@ -27,66 +29,72 @@ def G1_FLAT_TRACKING_ENV_CFG() -> ManagerBasedRlEnvCfg:
     reduce="none",
     num_slots=1,
   )
-  return create_tracking_env_cfg(
-    robot_cfg=get_g1_robot_cfg(),
-    action_scale=G1_ACTION_SCALE,
-    viewer_body_name="torso_link",
-    motion_file="",
-    anchor_body_name="torso_link",
-    body_names=(
-      "pelvis",
-      "left_hip_roll_link",
-      "left_knee_link",
-      "left_ankle_roll_link",
-      "right_hip_roll_link",
-      "right_knee_link",
-      "right_ankle_roll_link",
-      "torso_link",
-      "left_shoulder_roll_link",
-      "left_elbow_link",
-      "left_wrist_yaw_link",
-      "right_shoulder_roll_link",
-      "right_elbow_link",
-      "right_wrist_yaw_link",
-    ),
-    foot_friction_geom_names=(r"^(left|right)_foot[1-7]_collision$",),
-    ee_body_names=(
-      "left_ankle_roll_link",
-      "right_ankle_roll_link",
-      "left_wrist_yaw_link",
-      "right_wrist_yaw_link",
-    ),
-    base_com_body_name="torso_link",
-    sensors=(self_collision_cfg,),
-    pose_range={
-      "x": (-0.05, 0.05),
-      "y": (-0.05, 0.05),
-      "z": (-0.01, 0.01),
-      "roll": (-0.1, 0.1),
-      "pitch": (-0.1, 0.1),
-      "yaw": (-0.2, 0.2),
-    },
-    velocity_range={
-      "x": (-0.5, 0.5),
-      "y": (-0.5, 0.5),
-      "z": (-0.2, 0.2),
-      "roll": (-0.52, 0.52),
-      "pitch": (-0.52, 0.52),
-      "yaw": (-0.78, 0.78),
-    },
-    joint_position_range=(-0.1, 0.1),
+  cfg.scene.sensors = (self_collision_cfg,)
+
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  joint_pos_action.scale = G1_ACTION_SCALE
+
+  assert cfg.commands is not None
+  motion_cmd = cfg.commands["motion"]
+  assert isinstance(motion_cmd, MotionCommandCfg)
+  motion_cmd.anchor_body_name = "torso_link"
+  motion_cmd.body_names = (
+    "pelvis",
+    "left_hip_roll_link",
+    "left_knee_link",
+    "left_ankle_roll_link",
+    "right_hip_roll_link",
+    "right_knee_link",
+    "right_ankle_roll_link",
+    "torso_link",
+    "left_shoulder_roll_link",
+    "left_elbow_link",
+    "left_wrist_yaw_link",
+    "right_shoulder_roll_link",
+    "right_elbow_link",
+    "right_wrist_yaw_link",
   )
 
+  cfg.events["foot_friction"].params[
+    "asset_cfg"
+  ].geom_names = r"^(left|right)_foot[1-7]_collision$"
+  cfg.events["base_com"].params["asset_cfg"].body_names = ("torso_link",)
 
-@retval
-def G1_FLAT_TRACKING_NO_STATE_ESTIMATION_ENV_CFG() -> ManagerBasedRlEnvCfg:
-  """Create Unitree G1 flat terrain tracking config without state estimation.
+  cfg.terminations["ee_body_pos"].params["body_names"] = (
+    "left_ankle_roll_link",
+    "right_ankle_roll_link",
+    "left_wrist_yaw_link",
+    "right_wrist_yaw_link",
+  )
 
-  This variant disables motion_anchor_pos_b and base_lin_vel observations,
-  simulating the lack of state estimation.
-  """
-  cfg = deepcopy(G1_FLAT_TRACKING_ENV_CFG)
-  assert "policy" in cfg.observations
-  cfg.observations["policy"].terms.pop("motion_anchor_pos_b")
-  cfg.observations["policy"].terms.pop("base_lin_vel")
+  cfg.viewer.body_name = "torso_link"
+
+  # Modify observations if we don't have state estimation.
+  if not has_state_estimation:
+    new_policy_terms = {
+      k: v
+      for k, v in cfg.observations["policy"].terms.items()
+      if k not in ["motion_anchor_pos_b", "base_lin_vel"]
+    }
+    cfg.observations["policy"] = ObservationGroupCfg(
+      terms=new_policy_terms,
+      concatenate_terms=True,
+      enable_corruption=True,
+    )
+
+  # Apply play mode overrides.
+  if play:
+    # Effectively infinite episode length.
+    cfg.episode_length_s = int(1e9)
+
+    cfg.observations["policy"].enable_corruption = False
+    cfg.events.pop("push_robot", None)
+
+    # Disable RSI randomization.
+    motion_cmd.pose_range = {}
+    motion_cmd.velocity_range = {}
+
+    motion_cmd.sampling_mode = "start"
+
   return cfg

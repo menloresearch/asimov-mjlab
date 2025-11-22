@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from mjlab.sensor import ContactSensor
-from mjlab.third_party.isaaclab.isaaclab.utils.math import quat_error_magnitude
+from mjlab.utils.lab_api.math import quat_error_magnitude
 
 from .commands import MotionCommand
 

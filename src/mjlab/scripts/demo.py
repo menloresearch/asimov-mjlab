@@ -29,7 +29,7 @@ def main() -> None:
       motion_file=motion_path,
       num_envs=8,
       viewer="viser",
-      motion_command_sampling_mode="uniform",
+      _demo_mode=True,
     ),
   )
   run_play("Mjlab-Tracking-Flat-Unitree-G1", args)

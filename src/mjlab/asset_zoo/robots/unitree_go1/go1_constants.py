@@ -5,10 +5,11 @@ from pathlib import Path
 import mujoco
 
 from mjlab import MJLAB_SRC_PATH
+from mjlab.actuator import BuiltinPositionActuatorCfg, LearnedMlpActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 from mjlab.utils.actuator import ElectricActuator, reflected_inertia
 from mjlab.utils.os import update_assets
-from mjlab.utils.spec_config import ActuatorCfg, CollisionCfg
+from mjlab.utils.spec_config import CollisionCfg
 
 ##
 # MJCF and assets.
@@ -65,19 +66,48 @@ DAMPING_HIP = 2 * DAMPING_RATIO * HIP_ACTUATOR.reflected_inertia * NATURAL_FREQ
 STIFFNESS_KNEE = KNEE_ACTUATOR.reflected_inertia * NATURAL_FREQ**2
 DAMPING_KNEE = 2 * DAMPING_RATIO * KNEE_ACTUATOR.reflected_inertia * NATURAL_FREQ
 
-GO1_HIP_ACTUATOR_CFG = ActuatorCfg(
+GO1_HIP_ACTUATOR_CFG = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_joint", ".*_thigh_joint"),
-  effort_limit=HIP_ACTUATOR.effort_limit,
   stiffness=STIFFNESS_HIP,
   damping=DAMPING_HIP,
+  effort_limit=HIP_ACTUATOR.effort_limit,
   armature=HIP_ACTUATOR.reflected_inertia,
 )
-GO1_KNEE_ACTUATOR_CFG = ActuatorCfg(
+GO1_KNEE_ACTUATOR_CFG = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_calf_joint",),
-  effort_limit=KNEE_ACTUATOR.effort_limit,
   stiffness=STIFFNESS_KNEE,
   damping=DAMPING_KNEE,
+  effort_limit=KNEE_ACTUATOR.effort_limit,
   armature=KNEE_ACTUATOR.reflected_inertia,
+)
+
+# Learned actuator network trained from walk-these-ways.
+# Model architecture: MLP with 32 hidden units, 2 layers, softsign activation.
+GO1_LEARNED_ACTUATOR_PATH = (
+  MJLAB_SRC_PATH
+  / "asset_zoo"
+  / "robots"
+  / "unitree_go1"
+  / "assets"
+  / "walk_these_ways"
+  / "unitree_go1.pt"
+)
+
+GO1_LEARNED_ACTUATOR_CFG = LearnedMlpActuatorCfg(
+  joint_names_expr=(".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"),
+  network_file=str(GO1_LEARNED_ACTUATOR_PATH),
+  # NOTE: Network was trained with negative position error (current - target).
+  pos_scale=-1.0,
+  vel_scale=1.0,
+  torque_scale=1.0,
+  input_order="pos_vel",
+  history_length=3,
+  saturation_effort=23.7,
+  velocity_limit=30.0,
+  effort_limit=23.7,
+  # NOTE: This is technically wrong since the calf actuator has different armature,
+  # but we don't currently support dict-based fields for the actuator parameters.
+  armature=HIP_ACTUATOR.reflected_inertia,
 )
 
 ##
@@ -138,9 +168,14 @@ GO1_ARTICULATION = EntityArticulationInfoCfg(
   soft_joint_pos_limit_factor=0.9,
 )
 
+GO1_ARTICULATION_LEARNED = EntityArticulationInfoCfg(
+  actuators=(GO1_LEARNED_ACTUATOR_CFG,),
+  soft_joint_pos_limit_factor=0.9,
+)
+
 
 def get_go1_robot_cfg() -> EntityCfg:
-  """Get a fresh GO1 robot configuration instance.
+  """Get a fresh Go1 robot configuration instance.
 
   Returns a new EntityCfg instance each time to avoid mutation issues when
   the config is shared across multiple places.
@@ -153,18 +188,25 @@ def get_go1_robot_cfg() -> EntityCfg:
   )
 
 
+def get_go1_robot_cfg_learned() -> EntityCfg:
+  """Get a Go1 robot with learned actuator network."""
+  return EntityCfg(
+    init_state=INIT_STATE,
+    collisions=(FULL_COLLISION,),
+    spec_fn=get_spec,
+    articulation=GO1_ARTICULATION_LEARNED,
+  )
+
+
 GO1_ACTION_SCALE: dict[str, float] = {}
 for a in GO1_ARTICULATION.actuators:
+  assert isinstance(a, BuiltinPositionActuatorCfg)
   e = a.effort_limit
   s = a.stiffness
   names = a.joint_names_expr
-  if not isinstance(e, dict):
-    e = {n: e for n in names}
-  if not isinstance(s, dict):
-    s = {n: s for n in names}
+  assert e is not None
   for n in names:
-    if n in e and n in s and s[n]:
-      GO1_ACTION_SCALE[n] = 0.25 * e[n] / s[n]
+    GO1_ACTION_SCALE[n] = 0.25 * e / s
 
 
 if __name__ == "__main__":

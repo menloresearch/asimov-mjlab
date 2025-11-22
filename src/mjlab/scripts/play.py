@@ -4,24 +4,21 @@ import os
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
-import gymnasium as gym
 import torch
 import tyro
 from rsl_rl.runners import OnPolicyRunner
 
-from mjlab.envs import ManagerBasedRlEnvCfg
-from mjlab.rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
+from mjlab.envs import ManagerBasedRlEnv
+from mjlab.rl import RslRlVecEnvWrapper
+from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
 from mjlab.tasks.tracking.rl import MotionTrackingOnPolicyRunner
-from mjlab.third_party.isaaclab.isaaclab_tasks.utils.parse_cfg import (
-  load_cfg_from_registry,
-)
 from mjlab.utils.os import get_wandb_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
-from mjlab.viewer import NativeMujocoViewer, ViserViewer
-from mjlab.viewer.base import EnvProtocol
+from mjlab.utils.wrappers import VideoRecorder
+from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 
 
 @dataclass(frozen=True)
@@ -40,55 +37,8 @@ class PlayConfig:
   camera: int | str | None = None
   viewer: Literal["auto", "native", "viser"] = "auto"
 
-  motion_command_sampling_mode: Literal["start", "uniform"] = "start"
-  """Motion command sampling mode for tracking tasks."""
-
-
-def _apply_play_env_overrides(
-  cfg: ManagerBasedRlEnvCfg, motion_command_sampling_mode: Literal["start", "uniform"]
-) -> None:
-  """Apply PLAY mode overrides to an environment configuration.
-
-  PLAY mode is used for inference/evaluation with trained agents. This function
-  applies common overrides:
-  - Sets infinite episode length.
-  - Disables observation corruption.
-  - Removes stochastic training events (e.g., push_robot).
-  - Disables terrain curriculum if present.
-  - Disables RSI randomization for tracking tasks.
-
-  Args:
-    cfg: The environment configuration to modify in-place.
-  """
-  # Infinite episodes for continuous inference.
-  cfg.episode_length_s = int(1e9)
-
-  # Disable observation corruption for clean state information.
-  assert "policy" in cfg.observations
-  cfg.observations["policy"].enable_corruption = False
-
-  # Remove stochastic training events.
-  assert cfg.events is not None
-  cfg.events.pop("push_robot", None)
-
-  # Disable terrain curriculum for rough terrain environments.
-  assert cfg.scene.terrain is not None
-  terrain_gen = cfg.scene.terrain.terrain_generator
-  if terrain_gen is not None:
-    terrain_gen.curriculum = False
-    terrain_gen.num_cols = 5
-    terrain_gen.num_rows = 5
-    terrain_gen.border_width = 10.0
-
-  # Disable RSI randomization for tracking tasks.
-  if cfg.commands is not None and "motion" in cfg.commands:
-    from mjlab.tasks.tracking.mdp import MotionCommandCfg
-
-    motion_cmd = cfg.commands["motion"]
-    assert isinstance(motion_cmd, MotionCommandCfg)
-    motion_cmd.pose_range = {}
-    motion_cmd.velocity_range = {}
-    motion_cmd.sampling_mode = motion_command_sampling_mode
+  # Internal flag used by demo script.
+  _demo_mode: tyro.conf.Suppress[bool] = False
 
 
 def run_play(task: str, cfg: PlayConfig):
@@ -96,22 +46,25 @@ def run_play(task: str, cfg: PlayConfig):
 
   device = cfg.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
 
-  env_cfg = load_cfg_from_registry(task, "env_cfg_entry_point")
-  assert isinstance(env_cfg, ManagerBasedRlEnvCfg)
-  _apply_play_env_overrides(env_cfg, cfg.motion_command_sampling_mode)
-
-  agent_cfg = load_cfg_from_registry(task, "rl_cfg_entry_point")
-  assert isinstance(agent_cfg, RslRlOnPolicyRunnerCfg)
+  env_cfg = load_env_cfg(task, play=True)
+  agent_cfg = load_rl_cfg(task)
 
   DUMMY_MODE = cfg.agent in {"zero", "random"}
   TRAINED_MODE = not DUMMY_MODE
 
-  # Check if this is a tracking task by checking for motion command
+  # Check if this is a tracking task by checking for motion command.
   is_tracking_task = (
     env_cfg.commands is not None
     and "motion" in env_cfg.commands
     and isinstance(env_cfg.commands["motion"], MotionCommandCfg)
   )
+
+  if is_tracking_task and cfg._demo_mode:
+    # Demo mode: use uniform sampling to see more diversity with num_envs > 1.
+    assert env_cfg.commands is not None
+    motion_cmd = env_cfg.commands["motion"]
+    assert isinstance(motion_cmd, MotionCommandCfg)
+    motion_cmd.sampling_mode = "uniform"
 
   if is_tracking_task:
     assert env_cfg.commands is not None
@@ -124,7 +77,7 @@ def run_play(task: str, cfg: PlayConfig):
           "Tracking tasks require `registry_name` when using dummy agents."
         )
       # Check if the registry name includes alias, if not, append ":latest".
-      registry_name = cast(str, cfg.registry_name)
+      registry_name = cfg.registry_name
       if ":" not in registry_name:
         registry_name = registry_name + ":latest"
       import wandb
@@ -171,7 +124,7 @@ def run_play(task: str, cfg: PlayConfig):
       resume_path, was_cached = get_wandb_checkpoint_path(
         log_root_path, Path(cfg.wandb_run_path)
       )
-      # Extract run_id and checkpoint name from path for display
+      # Extract run_id and checkpoint name from path for display.
       run_id = resume_path.parent.name
       checkpoint_name = resume_path.name
       cached_str = "cached" if was_cached else "downloaded"
@@ -192,13 +145,14 @@ def run_play(task: str, cfg: PlayConfig):
     print(
       "[WARN] Video recording with dummy agents is disabled (no checkpoint/log_dir)."
     )
-  env = gym.make(task, cfg=env_cfg, device=device, render_mode=render_mode)
+  env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=render_mode)
 
   if TRAINED_MODE and cfg.video:
     print("[INFO] Recording videos during play")
-    env = gym.wrappers.RecordVideo(
+    assert log_dir is not None  # log_dir is set in TRAINED_MODE block
+    env = VideoRecorder(
       env,
-      video_folder=str(Path(log_dir) / "videos" / "play"),  # type: ignore[arg-type]
+      video_folder=log_dir / "videos" / "play",
       step_trigger=lambda step: step == 0,
       video_length=cfg.video_length,
       disable_logger=True,
@@ -244,9 +198,9 @@ def run_play(task: str, cfg: PlayConfig):
     resolved_viewer = cfg.viewer
 
   if resolved_viewer == "native":
-    NativeMujocoViewer(cast(EnvProtocol, env), policy).run()
+    NativeMujocoViewer(env, policy).run()
   elif resolved_viewer == "viser":
-    ViserViewer(cast(EnvProtocol, env), policy).run()
+    ViserPlayViewer(env, policy).run()
   else:
     raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
 
@@ -255,19 +209,18 @@ def run_play(task: str, cfg: PlayConfig):
 
 def main():
   # Parse first argument to choose the task.
-  task_prefix = "Mjlab-"
+  # Import tasks to populate the registry.
+  import mjlab.tasks  # noqa: F401
+
+  all_tasks = list_tasks()
   chosen_task, remaining_args = tyro.cli(
-    tyro.extras.literal_type_from_choices(
-      [k for k in gym.registry.keys() if k.startswith(task_prefix)]
-    ),
+    tyro.extras.literal_type_from_choices(all_tasks),
     add_help=False,
     return_unknown_args=True,
   )
-  del task_prefix
 
   # Parse the rest of the arguments + allow overriding env_cfg and agent_cfg.
-  agent_cfg = load_cfg_from_registry(chosen_task, "rl_cfg_entry_point")
-  assert isinstance(agent_cfg, RslRlOnPolicyRunnerCfg)
+  agent_cfg = load_rl_cfg(chosen_task)
 
   args = tyro.cli(
     PlayConfig,
