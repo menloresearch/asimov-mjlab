@@ -1,0 +1,24 @@
+{
+  "args": {
+    "data_path": "/home/menlo/selim/asimov-mjlab/data.csv",
+    "model_type": "mlp",
+    "epochs": 3,
+    "batch_size": 256,
+    "window_size": 8,
+    "learning_rate": 0.001,
+    "device": "cpu",
+    "checkpoint_dir": "./checkpoints",
+    "use_wandb": false,
+    "per_motor": false,
+    "motor_id": 1
+  },
+  "test_metrics": {
+    "test_loss": 0.023633959200266803,
+    "test_pos_loss": 0.025713566508224737,
+    "test_vel_loss": 0.021554352392950723,
+    "test_rmse": 0.15373340300750127,
+    "test_pos_rmse": 0.16035450261288187,
+    "test_vel_rmse": 0.1468140061198206
+  },
+  "model_params": 48194
+}

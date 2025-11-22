@@ -75,3 +75,42 @@ class AnklePrToTendonActionCfg(ActionTermCfg):
   from mjlab.envs.mdp.actions.ankle_ab_action import AnklePrToTendonAction
 
   class_type: type[ActionTerm] = AnklePrToTendonAction
+
+
+#
+# Learned actuator action configuration
+#
+
+
+@dataclass(kw_only=True)
+class LearnedActuatorActionCfg(JointActionCfg):
+  """Configuration for learned actuator dynamics action.
+
+  This action term uses a neural network trained on CAN bus data to simulate
+  realistic motor dynamics including:
+  - Request-response protocol latency
+  - Motor processing delays
+  - Temperature-dependent performance
+  - Tracking errors and systematic biases
+
+  The model was trained on real hardware data at 200Hz with 50Hz command updates.
+  """
+
+  from mjlab.envs.mdp.actions.learned_actuator_action import LearnedActuatorAction
+
+  class_type: type[ActionTerm] = LearnedActuatorAction
+
+  model_path: str = "actuator_checkpoints/best_model.pth"
+  """Path to the trained actuator model checkpoint."""
+
+  window_size: int = 8
+  """Number of historical timesteps for temporal context (8 * 5ms = 40ms window)."""
+
+  control_decimation: int = 4
+  """Number of simulation steps per policy update (4 * 5ms = 20ms = 50Hz)."""
+
+  use_position_target: bool = True
+  """If True, write position targets. If False, directly set joint states."""
+
+  use_default_offset: bool = True
+  """Whether to use default joint positions as offset."""

@@ -1,0 +1,24 @@
+{
+  "args": {
+    "data_path": "data.csv",
+    "model_type": "mlp",
+    "epochs": 100,
+    "batch_size": 512,
+    "window_size": 8,
+    "learning_rate": 0.001,
+    "device": "cuda",
+    "checkpoint_dir": "./actuator_checkpoints",
+    "use_wandb": false,
+    "per_motor": false,
+    "motor_id": 1
+  },
+  "test_metrics": {
+    "test_loss": 0.012224333727107687,
+    "test_pos_loss": 0.020502864214134976,
+    "test_vel_loss": 0.003945803677643548,
+    "test_rmse": 0.11056370890625769,
+    "test_pos_rmse": 0.14318821255304146,
+    "test_vel_rmse": 0.06281563243049892
+  },
+  "model_params": 48194
+}
