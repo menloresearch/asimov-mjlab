@@ -11,7 +11,8 @@ from mjlab.utils.actuator import (
   reflected_inertia_from_two_stage_planetary,
 )
 from mjlab.utils.os import update_assets
-from mjlab.utils.spec_config import ActuatorCfg, CollisionCfg
+from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.utils.spec_config import CollisionCfg
 
 ##
 # MJCF and assets.
@@ -116,7 +117,7 @@ DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
 
 # Asimov joint actuator configuration
 # Hip pitch and hip yaw use 7520_14 actuators
-ASIMOV_ACTUATOR_HIP_PITCH_YAW = ActuatorCfg(
+ASIMOV_ACTUATOR_HIP_PITCH_YAW = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_pitch_joint", ".*_hip_yaw_joint"),
   effort_limit=ACTUATOR_7520_14.effort_limit,
   armature=ACTUATOR_7520_14.reflected_inertia,
@@ -125,7 +126,7 @@ ASIMOV_ACTUATOR_HIP_PITCH_YAW = ActuatorCfg(
 )
 
 # Hip roll and knee use 7520_22 actuators (more powerful)
-ASIMOV_ACTUATOR_HIP_ROLL_KNEE = ActuatorCfg(
+ASIMOV_ACTUATOR_HIP_ROLL_KNEE = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_hip_roll_joint", ".*_knee_joint"),
   effort_limit=ACTUATOR_7520_22.effort_limit,
   armature=ACTUATOR_7520_22.reflected_inertia,
@@ -134,7 +135,7 @@ ASIMOV_ACTUATOR_HIP_ROLL_KNEE = ActuatorCfg(
 )
 
 # Ankle joints - using doubled 5020 actuators for parallel linkage
-ASIMOV_ACTUATOR_ANKLE = ActuatorCfg(
+ASIMOV_ACTUATOR_ANKLE = BuiltinPositionActuatorCfg(
   joint_names_expr=(".*_ankle_pitch_joint", ".*_ankle_roll_joint"),
   effort_limit=ACTUATOR_5020.effort_limit * 2,
   armature=ACTUATOR_5020.reflected_inertia * 2,
@@ -249,6 +250,84 @@ def get_asimov_robot_cfg() -> EntityCfg:
     collisions=(FEET_ONLY_COLLISION,),
     spec_fn=get_spec,
     articulation=ASIMOV_ARTICULATION,
+  )
+
+
+def get_asimov_robot_cfg_with_learned_actuator(network_file: str) -> EntityCfg:
+  """Get Asimov robot configuration with learned MLP actuator.
+
+  Args:
+      network_file: Path to TorchScript (.pt) file containing trained actuator network.
+
+  Returns:
+      EntityCfg with LearnedMlpActuator configured for all leg joints.
+  """
+  from mjlab.actuator.learned_actuator import LearnedMlpActuatorCfg
+
+  # Create learned actuator config for all leg joints
+  # The network predicts torque from [pos_error_history, vel_history]
+  learned_actuator = LearnedMlpActuatorCfg(
+    joint_names_expr=(".*_hip_pitch_joint", ".*_hip_roll_joint", ".*_hip_yaw_joint",
+                      ".*_knee_joint", ".*_ankle_pitch_joint", ".*_ankle_roll_joint"),
+    network_file=network_file,
+    # Use effort limits from original actuators for clamping
+    effort_limit={
+      ".*_hip_pitch_joint": ACTUATOR_7520_14.effort_limit,
+      ".*_hip_yaw_joint": ACTUATOR_7520_14.effort_limit,
+      ".*_hip_roll_joint": ACTUATOR_7520_22.effort_limit,
+      ".*_knee_joint": ACTUATOR_7520_22.effort_limit,
+      ".*_ankle_pitch_joint": ACTUATOR_5020.effort_limit * 2,
+      ".*_ankle_roll_joint": ACTUATOR_5020.effort_limit * 2,
+    },
+    # DC motor saturation parameters
+    saturation_effort={
+      ".*_hip_pitch_joint": ACTUATOR_7520_14.effort_limit,
+      ".*_hip_yaw_joint": ACTUATOR_7520_14.effort_limit,
+      ".*_hip_roll_joint": ACTUATOR_7520_22.effort_limit,
+      ".*_knee_joint": ACTUATOR_7520_22.effort_limit,
+      ".*_ankle_pitch_joint": ACTUATOR_5020.effort_limit * 2,
+      ".*_ankle_roll_joint": ACTUATOR_5020.effort_limit * 2,
+    },
+    velocity_limit={
+      ".*_hip_pitch_joint": ACTUATOR_7520_14.velocity_limit,
+      ".*_hip_yaw_joint": ACTUATOR_7520_14.velocity_limit,
+      ".*_hip_roll_joint": ACTUATOR_7520_22.velocity_limit,
+      ".*_knee_joint": ACTUATOR_7520_22.velocity_limit,
+      ".*_ankle_pitch_joint": ACTUATOR_5020.velocity_limit,
+      ".*_ankle_roll_joint": ACTUATOR_5020.velocity_limit,
+    },
+    # Armature for realistic motor inertia
+    armature={
+      ".*_hip_pitch_joint": ACTUATOR_7520_14.reflected_inertia,
+      ".*_hip_yaw_joint": ACTUATOR_7520_14.reflected_inertia,
+      ".*_hip_roll_joint": ACTUATOR_7520_22.reflected_inertia,
+      ".*_knee_joint": ACTUATOR_7520_22.reflected_inertia,
+      ".*_ankle_pitch_joint": ACTUATOR_5020.reflected_inertia * 2,
+      ".*_ankle_roll_joint": ACTUATOR_5020.reflected_inertia * 2,
+    },
+    # Scaling factors for network inputs/outputs
+    pos_scale=1.0,   # Position error is already in radians
+    vel_scale=0.05,  # Match observation scaling (joint_vel × 0.05)
+    torque_scale=1.0,  # Network outputs in Nm
+    # Network configuration
+    input_order="pos_vel",  # Position errors first, then velocities
+    history_length=3,  # Match training configuration
+    # Learned actuators don't use PD control
+    stiffness=0.0,
+    damping=0.0,
+  )
+
+  # Create articulation with learned actuator
+  learned_articulation = EntityArticulationInfoCfg(
+    actuators=(learned_actuator,),
+    soft_joint_pos_limit_factor=0.9,
+  )
+
+  return EntityCfg(
+    init_state=KNEES_BENT_KEYFRAME,
+    collisions=(FEET_ONLY_COLLISION,),
+    spec_fn=get_spec,
+    articulation=learned_articulation,
   )
 
 

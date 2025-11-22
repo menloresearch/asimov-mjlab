@@ -9,15 +9,13 @@ from copy import deepcopy
 from mjlab.asset_zoo.robots.asimov.asimov_constants import (
   ASIMOV_ACTION_SCALE,
   get_asimov_robot_cfg,
+  get_asimov_robot_cfg_with_learned_actuator,
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.sensor import ContactMatch, ContactSensorCfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import create_velocity_env_cfg
 from mjlab.utils.retval import retval
-
-# Import the learned actuator configuration
-from mjlab.envs.mdp.actions import LearnedActuatorActionCfg
 
 
 @retval
@@ -53,8 +51,13 @@ def ASIMOV_ROUGH_ENV_CFG_LEARNED() -> ManagerBasedRlEnvCfg:
     num_slots=1,
   )
 
+  # Use robot cfg with learned actuator network
+  robot_cfg = get_asimov_robot_cfg_with_learned_actuator(
+    network_file="actuator_torque_checkpoints/actuator_network.pt"
+  )
+
   cfg = create_velocity_env_cfg(
-    robot_cfg=get_asimov_robot_cfg(),
+    robot_cfg=robot_cfg,
     action_scale=deepcopy(ASIMOV_ACTION_SCALE),
     viewer_body_name="pelvis_link",
     site_names=site_names,
@@ -87,21 +90,6 @@ def ASIMOV_ROUGH_ENV_CFG_LEARNED() -> ManagerBasedRlEnvCfg:
 
   # Configure scene for 4096 environments
   cfg.scene.num_envs = 4096
-
-  # MODIFICATION: Replace standard JointPositionAction with LearnedActuatorAction
-  cfg.actions = {
-    "joint_pos": LearnedActuatorActionCfg(
-      asset_name="robot",
-      actuator_names=(".*",),  # All actuators
-      scale=ASIMOV_ACTION_SCALE,
-      use_default_offset=True,
-      # Learned actuator specific parameters
-      model_path="actuator_checkpoints/best_model.pth",
-      window_size=8,  # 40ms history window
-      control_decimation=4,  # 50Hz policy, 200Hz simulation
-      use_position_target=False,  # Directly set joint states for more accurate dynamics
-    )
-  }
 
   # SIM2REAL FIX: Remove base_lin_vel observation to match firmware (45 obs instead of 48)
   # Firmware observation structure: [base_ang_vel(3), projected_gravity(3), command(3),
