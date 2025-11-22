@@ -123,28 +123,65 @@ MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
 
 ### 📊 Visualize Your Trained Policy
 
+#### 🎬 Demo Mode - Multiple Robots with Diverse Walking
+
+**NEW!** Easy demo script to visualize 20 robots with diverse behaviors (like the old repo):
+
+```bash
+# Quick demo with 20 robots - diverse walking
+./scripts/demo_asimov.sh logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_150.pt 20
+
+# Demo with 8 robots
+./scripts/demo_asimov.sh logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_150.pt 8
+
+# Default (20 robots)
+./scripts/demo_asimov.sh logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_150.pt
+```
+
+**What you'll see:**
+- Multiple robots rendered side-by-side
+- Each robot receives different random velocity commands
+- Some walk forward, some backward, some turn, some stand still
+- Commands change every 3-8 seconds (realistic behavior variety)
+
+**Or run manually:**
+
+```bash
+# 20 robots with diverse walking behaviors
+MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
+  --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
+  --num-envs 20
+
+# Force all robots to walk forward at 0.5 m/s (controlled demo)
+MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
+  --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
+  --num-envs 8 \
+  --commands.twist.ranges.lin_vel_x 0.5 0.5 \
+  --commands.twist.ranges.lin_vel_y 0.0 0.0 \
+  --commands.twist.ranges.ang_vel_z 0.0 0.0
+```
+
+#### 🎥 Single Robot Visualization & Recording
+
 **IMPORTANT**: Use `--video True` (not just `--video`) and `--checkpoint-file` with full path!
 
 ```bash
-# View your trained Asimov robot in action (NO VIDEO)
+# View single robot in action (NO VIDEO)
 MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
-  --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt
+  --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
+  --num-envs 1
 
 # Record a video (IMPORTANT: --video True not just --video)
 MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
   --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
-  --video True
+  --video True \
+  --num-envs 1
 
-# Record video with custom length and single environment
+# Record video with custom length
 MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
   --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
   --video True \
   --video-length 500 \
-  --num-envs 1
-
-# Visualize with fewer environments (cleaner view)
-MUJOCO_GL=egl uv run play Mjlab-Velocity-Flat-Asimov-Learned \
-  --checkpoint-file logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/model_450.pt \
   --num-envs 1
 ```
 

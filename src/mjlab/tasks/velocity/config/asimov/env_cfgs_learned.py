@@ -144,6 +144,13 @@ def ASIMOV_ROUGH_ENV_CFG_LEARNED(play: bool = False) -> ManagerBasedRlEnvCfg:
         cfg.scene.terrain.terrain_generator.num_rows = 5
         cfg.scene.terrain.terrain_generator.border_width = 10.0
 
+    # Disable forced standing in play mode
+    commands = cfg.commands
+    assert commands is not None
+    twist_cmd = commands["twist"]
+    assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+    twist_cmd.rel_standing_envs = 0.0
+
   return cfg
 
 
@@ -161,6 +168,10 @@ def ASIMOV_FLAT_ENV_CFG_LEARNED(play: bool = False) -> ManagerBasedRlEnvCfg:
   assert "terrain_levels" in cfg.curriculum
   del cfg.curriculum["terrain_levels"]
 
+  # Disable command_vel curriculum in play mode to allow velocity overrides
+  if play and "command_vel" in cfg.curriculum:
+    del cfg.curriculum["command_vel"]
+
   if play:
     commands = cfg.commands
     assert commands is not None
@@ -168,5 +179,6 @@ def ASIMOV_FLAT_ENV_CFG_LEARNED(play: bool = False) -> ManagerBasedRlEnvCfg:
     assert isinstance(twist_cmd, UniformVelocityCommandCfg)
     twist_cmd.ranges.lin_vel_x = (-0.8, 0.8)
     twist_cmd.ranges.ang_vel_z = (-0.6, 0.6)
+    twist_cmd.rel_standing_envs = 0.0  # No forced standing in play mode
 
   return cfg
