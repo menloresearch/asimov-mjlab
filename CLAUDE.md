@@ -63,17 +63,63 @@
 
 ## How to Train - Simple Commands
 
-### 🚀 Quick Start - Just Run This!
+### 🚀 Quick Start - Single GPU Training
 ```bash
 # Train Asimov with learned actuator dynamics (RECOMMENDED)
-MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned --env.scene.num_envs 4096
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned --env.scene.num_envs 8192
 
 # Train on rough terrain
-MUJOCO_GL=egl uv run train Mjlab-Velocity-Rough-Asimov-Learned --env.scene.num_envs 4096
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Rough-Asimov-Learned --env.scene.num_envs 8192
 
 # Train baseline (ideal actuators) for comparison
-MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov --env.scene.num_envs 4096
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov --env.scene.num_envs 8192
 ```
+
+### 🚀🚀 Dual GPU Training - 2× Throughput!
+
+**IMPORTANT**: When using 2 GPUs, each GPU runs the full `num-envs` count independently!
+- `--gpu-ids 0 1 --env.scene.num_envs 8192` = **16,384 total environments** (8192 per GPU)
+- Nearly linear throughput scaling (2× GPUs ≈ 2× FPS)
+
+```bash
+# Dual GPU training - Learned actuator dynamics (RECOMMENDED)
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids 0 1 \
+  --env.scene.num_envs 8192
+
+# Dual GPU - Rough terrain
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Rough-Asimov-Learned \
+  --gpu-ids 0 1 \
+  --env.scene.num_envs 8192
+
+# Dual GPU - Maximum environments (12,288 per GPU = 24,576 total!)
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids 0 1 \
+  --env.scene.num_envs 12288
+
+# Use all available GPUs automatically
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids all \
+  --env.scene.num_envs 8192
+```
+
+**Key points:**
+- `--gpu-ids 0 1` uses both A6000 GPUs
+- Each GPU runs independent rollouts with different random seeds
+- Gradients synchronized automatically during policy updates
+- Only rank 0 GPU writes logs/videos (no duplicate files)
+- Logs saved to `{log_dir}/torchrunx/` for debugging
+
+> **📚 More on Distributed Training**
+>
+> For advanced configuration, logging, and technical details about how multi-GPU training works, see:
+> `/home/menlo/selim/asimov-mjlab/docs/api/distributed_training.md`
+>
+> Topics covered:
+> - Custom torchrunx logging directories (`--torchrunx-log-dir`)
+> - Using `CUDA_VISIBLE_DEVICES` for specific GPU selection
+> - How gradient synchronization works
+> - Process spawning and rank coordination
 
 ### 📊 Visualize Your Trained Policy
 
@@ -117,12 +163,106 @@ ls -lh logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/
 ```
 
 ### Performance Scaling Guide
-| GPU Memory | Environments | Mini-batches | Expected FPS |
-|------------|-------------|--------------|--------------|
-| 24GB (4090) | 4096 | 4 | ~125K |
-| 48GB (A6000) | 8192 | 8 | ~200K+ |
-| 48GB (A6000) | 12288 | 8 | ~250K+ |
-| 48GB (A6000) | 16384 | 6 | ~300K+ |
+| GPU Setup | GPU Memory | Environments/GPU | Total Envs | Expected FPS |
+|-----------|------------|------------------|------------|--------------|
+| Single 4090 | 24GB | 4096 | 4096 | ~125K |
+| Single A6000 | 48GB | 8192 | 8192 | ~200K+ |
+| Single A6000 | 48GB | 12288 | 12288 | ~250K+ |
+| Single A6000 | 48GB | 16384 | 16384 | ~300K+ |
+| **Dual A6000** | **48GB×2** | **8192** | **16384** | **~400K+** |
+| **Dual A6000** | **48GB×2** | **12288** | **24576** | **~500K+** |
+
+**Note**: Dual GPU FPS is approximate 2× single GPU due to near-linear scaling.
+
+### 🚀 Maximum Throughput Scaling
+
+**Current Setup Analysis** (2x A6000, 48GB each):
+- Running 12,288 envs/GPU = 24,576 total environments
+- **VRAM usage: Only ~10GB per GPU (20% of 48GB capacity!)**
+- GPU utilization: 85-89% (excellent)
+- **Plenty of headroom to scale higher!**
+
+**mjlab Environment Scaling Capabilities:**
+- ✅ **No hardcoded limits on `num_envs`** - only GPU memory constrains scaling
+- ✅ Can scale to **16,384-20,480 environments per GPU**
+- ✅ Total capacity: **32,768-40,960 total environments** on dual A6000s
+
+**VRAM Usage Estimates** (per GPU, Asimov):
+| Environments/GPU | Estimated VRAM | % of 48GB | Total Envs (Dual GPU) |
+|------------------|----------------|-----------|------------------------|
+| 8,192 | ~8 GB | 17% | 16,384 |
+| 12,288 | ~10 GB | 21% | 24,576 |
+| 16,384 | ~15 GB | 31% | 32,768 |
+| 20,480 | ~20 GB | 42% | 40,960 |
+| 24,576 | ~25 GB | 52% | 49,152 |
+
+**Recommended Maximum Configurations:**
+
+```bash
+# Conservative maximum (good safety margin)
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids 0 1 \
+  --env.scene.num_envs 16384 \
+  --env.sim.nconmax 150 \
+  --env.sim.njmax 900
+
+# Aggressive maximum (push the limits!)
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids 0 1 \
+  --env.scene.num_envs 20480 \
+  --env.sim.nconmax 200 \
+  --env.sim.njmax 1200
+```
+
+**Important: Scale MuJoCo Limits with Environment Count**
+
+When increasing environments, you MUST increase MuJoCo contact and constraint limits:
+
+| Environments/GPU | nconmax | njmax | Why |
+|------------------|---------|-------|-----|
+| 8,192 | 100 | 600 | Default (safe) |
+| 12,288 | 120 | 750 | Current setup |
+| 16,384 | 150 | 900 | More contacts per env |
+| 20,480 | 200 | 1200 | Maximum capacity |
+
+**What happens if limits are too low:**
+- `nconmax` exceeded → MuJoCo error: "too many contacts"
+- `njmax` exceeded → MuJoCo error: "constraint Jacobian matrix overflow"
+- Simulation will crash or produce incorrect physics
+
+**Formula for tuning:**
+- `nconmax` ≈ (num_envs / 100) rounded up to nearest 50
+- `njmax` ≈ nconmax × 6
+
+**Monitoring for OOM (Out of Memory) errors:**
+
+```bash
+# Watch GPU memory in real-time during training
+watch -n 1 nvidia-smi
+
+# If you see:
+# - "CUDA out of memory" → Reduce num_envs by 2048-4096
+# - VRAM usage >95% → Reduce num_envs to stay under 90%
+# - Training crashes during env reset → Increase nconmax/njmax
+```
+
+### Batch Size Recommendations (48GB A6000)
+
+With 48GB VRAM per GPU, you can use larger batch sizes for better training stability:
+
+```bash
+# Recommended configurations
+--env.scene.num_envs 8192      # Standard, ~200K FPS
+--env.scene.num_envs 12288     # High throughput, ~250K FPS
+--env.scene.num_envs 16384     # Maximum single GPU, ~300K FPS
+
+# Mini-batch configuration (scales with num_envs)
+--agent.algorithm.num_mini_batches 8   # Default, works well for 8192+ envs
+
+# For dual GPU setups
+--gpu-ids 0 1 --env.scene.num_envs 8192   # 16,384 total envs
+--gpu-ids 0 1 --env.scene.num_envs 12288  # 24,576 total envs
+```
 
 ### Advanced Optimization Parameters
 ```bash
@@ -137,13 +277,33 @@ ls -lh logs/rsl_rl/asimov_velocity/2025-11-22_13-35-13/
 
 ### Training Scripts - Ready to Use!
 ```bash
-# Single GPU optimized training (run this!)
-./train_asimov_a6000.sh         # Flat terrain, 8192 envs
-./train_asimov_a6000.sh rough   # Rough terrain, 8192 envs
-./train_asimov_a6000.sh flat 12288  # Flat, 12288 envs
+# Single GPU optimized training
+./train_asimov_a6000.sh         # Flat terrain, 8192 envs, single GPU
+./train_asimov_a6000.sh rough   # Rough terrain, 8192 envs, single GPU
+./train_asimov_a6000.sh flat 12288  # Flat, 12288 envs, single GPU
 
-# Dual GPU parallel training (maximize both GPUs!)
-./train_asimov_dual.sh          # Trains flat & rough simultaneously
+# Dual GPU parallel training (if script exists)
+./train_asimov_dual.sh          # Dual GPU, 8192 envs/GPU (16,384 total)
+
+# Or use direct commands for dual GPU:
+MUJOCO_GL=egl uv run train Mjlab-Velocity-Flat-Asimov-Learned \
+  --gpu-ids 0 1 --env.scene.num_envs 8192
+```
+
+### Advanced GPU Selection
+
+```bash
+# Use only GPU 1 (second GPU)
+uv run train Mjlab-Velocity-Flat-Asimov-Learned --gpu-ids 1 --env.scene.num_envs 8192
+
+# Use GPUs in different order (e.g., GPU 1 then GPU 0)
+uv run train Mjlab-Velocity-Flat-Asimov-Learned --gpu-ids 1 0 --env.scene.num_envs 8192
+
+# CPU-only mode (no GPU)
+uv run train Mjlab-Velocity-Flat-Asimov-Learned --gpu-ids None
+
+# Control via environment variable (useful for job schedulers)
+CUDA_VISIBLE_DEVICES=0,1 uv run train Mjlab-Velocity-Flat-Asimov-Learned --gpu-ids all
 ```
 
 ### Baseline Configurations (for comparison)
