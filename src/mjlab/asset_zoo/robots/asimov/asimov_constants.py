@@ -164,9 +164,9 @@ STANDING_KEYFRAME = EntityCfg.InitialStateCfg(
 
 # Knees bent pose for stability
 # NOTE: Left and right sides have OPPOSITE axis directions!
-# Knees:
-# - Left knee: axis=(0, -1, 0), range=[-2, 0.09] → negative = extend back
-# - Right knee: axis=(0, 1, 0), range=[-0.09, 2] → positive = extend back
+# Knees (URDF LIMITS - CORRECTED):
+# - Left knee: axis=(0, -1, 0), range=[0.0, 1.5] → POSITIVE = extend back
+# - Right knee: axis=(0, 1, 0), range=[-1.5, 0.0] → NEGATIVE = extend back
 # Ankle pitch:
 # - Left ankle: axis=(0, 1, 0) → positive = pitch up
 # - Right ankle: axis=(0, -1, 0) → negative = pitch up
@@ -178,8 +178,8 @@ KNEES_BENT_KEYFRAME = EntityCfg.InitialStateCfg(
     "right_hip_pitch_joint": -0.2,    # Opposite due to canted axis
     ".*_hip_roll_joint": 0.0,
     ".*_hip_yaw_joint": 0.0,
-    "left_knee_joint": -0.4,          # Left: negative = extend backwards
-    "right_knee_joint": 0.4,          # Right: positive = extend backwards
+    "left_knee_joint": 0.4,           # Left: POSITIVE = extend back (URDF corrected!)
+    "right_knee_joint": -0.4,         # Right: NEGATIVE = extend back (URDF corrected!)
     "left_ankle_pitch_joint": -0.25,  # From v1.yaml config
     "right_ankle_pitch_joint": 0.25,  # Opposite axis
     ".*_ankle_roll_joint": 0.0,
