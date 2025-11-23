@@ -150,6 +150,8 @@ def ASIMOV_ROUGH_ENV_CFG_LEARNED(play: bool = False) -> ManagerBasedRlEnvCfg:
     twist_cmd = commands["twist"]
     assert isinstance(twist_cmd, UniformVelocityCommandCfg)
     twist_cmd.rel_standing_envs = 0.0
+    # Force immediate command resampling in play mode for diverse walking
+    twist_cmd.resampling_time_range = (0.001, 0.002)
 
   return cfg
 
@@ -180,5 +182,7 @@ def ASIMOV_FLAT_ENV_CFG_LEARNED(play: bool = False) -> ManagerBasedRlEnvCfg:
     twist_cmd.ranges.lin_vel_x = (-0.8, 0.8)
     twist_cmd.ranges.ang_vel_z = (-0.6, 0.6)
     twist_cmd.rel_standing_envs = 0.0  # No forced standing in play mode
+    # Force immediate command resampling in play mode for diverse walking
+    twist_cmd.resampling_time_range = (0.001, 0.002)
 
   return cfg

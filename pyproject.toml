@@ -48,6 +48,8 @@ dependencies = [
     "onnxscript>=0.5.4",
     "wandb>=0.22.3",
     "pandas>=2.3.3",
+    "onnxruntime>=1.23.2",
+    "matplotlib>=3.10.7",
 ]
 
 [project.urls]
