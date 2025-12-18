@@ -8,9 +8,6 @@ from mjlab.envs.mdp.actions.actions_config import (
 from mjlab.envs.mdp.actions.actions_config import (
   JointVelocityActionCfg as JointVelocityActionCfg,
 )
-from mjlab.envs.mdp.actions.actions_config import (
-  AnklePrToTendonActionCfg as AnklePrToTendonActionCfg,
-)
 from mjlab.envs.mdp.actions.joint_actions import JointAction as JointAction
 from mjlab.envs.mdp.actions.joint_actions import JointEffortAction as JointEffortAction
 from mjlab.envs.mdp.actions.joint_actions import (
@@ -18,7 +15,4 @@ from mjlab.envs.mdp.actions.joint_actions import (
 )
 from mjlab.envs.mdp.actions.joint_actions import (
   JointVelocityAction as JointVelocityAction,
-)
-from mjlab.envs.mdp.actions.ankle_ab_action import (
-  AnklePrToTendonAction as AnklePrToTendonAction,
 )
